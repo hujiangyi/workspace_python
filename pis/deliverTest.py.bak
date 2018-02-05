@@ -1,0 +1,826 @@
+import sys
+sys.path.append("C:\WINDOWS\SYSTEM32\python27.zip")
+sys.path.append("C:\Python27\DLLs")
+sys.path.append("C:\Python27\lib")
+sys.path.append("C:\Python27\lib\plat-win")
+sys.path.append("C:\Python27\lib\lib-tk")
+sys.path.append("C:\Python27")
+sys.path.append("C:\Python27\lib\site-packages")
+
+import serial
+import re
+import os
+import time
+from pysnmp.hlapi import *
+
+res = ''
+err = ''
+ss = serial.Serial()
+#obIp='192.168.0.10'
+obIp='172.17.2.153'
+obMask='255.255.255.0'
+ftpIp='192.168.0.200'
+ftpUserName='suma'
+ftpPassword='sumavision'
+
+def connect(p='COM3'):
+    print 'connect to serial port ' + p
+    try:
+        ss.port = p
+        ss.baudrate  = 9600
+        print 'open serial port ' + p
+        ss.open()
+    except BaseException,msg:
+        print msg
+        msg = 'Serial port connecting failed'
+        err = msg
+        raise Exception(msg)
+
+def close():
+    try:
+        print 'close serial port'
+        ss.close()
+    except Exception,msg:
+        print msg
+        msg = 'Serial port close failed'
+        err = msg
+        raise Exception(msg)
+
+def send(cmd):
+    terminator = '\r'
+    cmd = str(cmd)
+    cmd += terminator
+    try:
+        msg = cmd
+        ss.write(cmd)
+    except Exception,msg:
+        print msg
+        raise Exception("Serial port write error!")
+
+def read(delay=1):
+    time.sleep(delay)
+    n = ss.inWaiting()
+    str = ss.read(n)
+    return str
+
+def readuntil(waitstr='xxx', timeout=0):
+    tmp=""
+    if timeout != 0:
+        delay = 0.0
+        while delay <= timeout:
+            tmp += read()
+            if waitstr in tmp:
+                return tmp
+            delay += 1
+        raise Exception("wait str timeout")
+    else:
+        while 1:
+            tmp += read()
+            if needLogin(tmp) :
+                send('')
+                tmp += read()
+            if waitstr in tmp:
+                return tmp
+
+def readuntilII(waitstr='xxx', timeout=0):
+    tmp=""
+    if timeout != 0:
+        delay = 0.0
+        while delay <= timeout:
+            tmp += read()
+            if waitstr in tmp:
+                return tmp
+            delay += 1
+        raise Exception("wait str timeout")
+    else:
+        while 1:
+            tmp += read()
+            if waitstr in tmp:
+                return tmp
+
+def result():
+    global res
+    return res
+
+def error():
+    global err
+    return err
+
+def sleepT(delay):
+    print 'sleep ' + int(delay) + 'sec start'
+    time.sleep(delay)
+    print 'sleep ' + int(delay) + 'sec end'
+
+def needLogin(str):
+    global res
+    res = "";
+    res += str
+    if 'assword:' in str:
+        try:
+            print 'CLI timeout need login.'
+            send('')
+            res += readuntilII(waitstr='assword:', timeout=30);
+            send('suma')
+            res += readuntilII('PN8600>')
+            send('en')
+            res += readuntilII('Enable Password:')
+            send('suma')
+            res += readuntilII('PN8600#')
+            return True
+        except Exception,msg:
+            print msg
+            err = msg
+
+def eraseandreboot():
+    global res
+    res = "";
+    try:
+        print 'erase start-upconfig'
+        send('end')
+        res += readuntil('PN8600#')
+        send('erase start-upconfig')
+        res += readuntil('PN8600#')
+        print 'system reboot'
+        send('system reboot')
+        res += readuntil('System will reboot!')
+        send('y')
+        res += readuntil('System now is rebooting,please wait.')
+        return True
+    except Exception,msg:
+        print msg
+        err = msg
+        return False
+
+def mpuStarted():
+    global res
+    res = "";
+    str = read()
+    res += str
+    if 'assword:' in str:
+        try:
+            print 'Mpu started'
+            send('')
+            res += readuntilII(waitstr='assword:', timeout=30);
+            send('suma')
+            res += readuntilII('PN8600>')
+            send('en')
+            res += readuntilII('Enable Password:')
+            send('suma')
+            res += readuntilII('PN8600#')
+            return True
+        except Exception,msg:
+            print msg
+            err = msg
+            return False
+    else :
+        err = 'Mpu not ready'
+        return False
+
+def sendF2():
+    global res
+    res = "";
+    try:
+        print 'Wait stop auto-boot'
+        res += readuntil(waitstr='stop auto-boot', timeout=30);
+        cmd = '\033OQ'
+        print 'Send F2'
+        send(cmd)
+        res += readuntil('[PN8600 Boot]:')
+        return True
+    except Exception,msg:
+        print msg
+        err = msg
+        return False
+
+def startUpArg():
+    global res
+    res = "";
+    try:
+        send('p')
+        res += readuntil('[PN8600 Boot]:')
+        print
+        print 'Modify startup arg'
+        send('c')
+        res += readuntil('boot device          :')
+        send('mottsec0')
+        res += readuntil('processor number')
+        send('0')
+        res += readuntil('host name')
+        send('host')
+        res += readuntil('file name')
+        send('mpu.bin')
+        res += readuntil('inet on ethernet (e) :')
+        send(obIp)
+        res += readuntil('inet on backplane (b):')
+        send('')
+        res += readuntil('host inet (h)        :')
+        send(ftpIp)
+        res += readuntil('gateway inet (g)     :')
+        send('')
+        res += readuntil('user (u)             :')
+        send(ftpUserName)
+        res += readuntil('ftp password (pw) (blank = use rsh):')
+        send(ftpPassword)
+        res += readuntil('flags (f)            :')
+        send('0x0')
+        res += readuntil('target name (tn)     :')
+        send('ads8308')
+        res += readuntil('startup script (s)   :')
+        send('')
+        res += readuntil('other (o)            :')
+        send('mottsec0')
+        res += readuntil('[PN8600 Boot]:')
+        send('p')
+        res += readuntil('[PN8600 Boot]:')
+        send('@')
+        print 'starting......'
+        return True
+    except Exception,msg:
+        print msg
+        err = msg
+        return False
+
+def assignBoard():
+    global res
+    res = "";
+    try:
+        send('end')
+        res += readuntil('PN8600#')
+        send('show board')
+        boardInfo = readuntil(waitstr='PN8600#');
+        res +=boardInfo
+        send('configure terminal')
+        res += readuntil('PN8600(config)#')
+        bs = boardInfo.split('\r\r\n')
+        for s in bs :
+            if 'show board' in s :
+                continue
+            if 'Slot   Assign Type      Present Type     Admin Status     Operation Status' in s :
+                continue
+            if '------' in s :
+                continue
+            if 'Total:' in s :
+                continue
+            if '#' in s :
+                continue
+            #print s
+            slotid=s[2:4].strip()
+            assignType=s[9:13].strip()
+            presentType=s[26:33].strip()
+            adminStatus=s[43:46]
+            operationStatus=s[60:64]
+            #print slotid + ' ' + assignType + ' ' + presentType + ' ' + adminStatus + ' ' + operationStatus
+            if presentType == 'unknown':
+                continue
+            if presentType == '-':
+                continue
+            if assignType != '-':
+                continue
+            presentType=presentType[0:4]
+            cmd='board assign ' + slotid + ' ' + presentType;
+            send(cmd)
+            res +=readuntil(waitstr='PN8600(config)#');
+            cmd='board admin ' + slotid + ' is';
+            send(cmd)
+            res +=readuntil(waitstr='PN8600(config)#');
+        return True
+    except Exception,msg:
+        print msg
+        err = msg
+        return False
+
+def outbandIp():
+    global res
+    res = "";
+    try:
+        send('end')
+        res += readuntil('PN8600#')
+        send('configure terminal')
+        res += readuntil('PN8600(config)#')
+        send('outband ip-address ' + obIp + ' ' + obMask)
+        outbandIp= readuntil('PN8600(config)#')
+        res+=outbandIp
+        if '%' in outbandIp :
+            raise Exception("set outbandIp error")
+        return True
+    except Exception,msg:
+        print msg
+        err = msg
+        return False
+
+def rtcTime():
+    global res
+    res = "";
+    try:
+        import datetime
+        i = datetime.datetime.now()
+        year = i.year
+        month=i.month
+        day=i.day
+        hour=i.hour
+        minute=i.minute
+        second=i.second
+        cmd='datetime ' + str(year) + ' ' + str(month) + ' ' + str(day) + ' ' + str(hour) + ' ' + str(minute) + ' ' + str(second)
+        send('end')
+        res += readuntil('PN8600#')
+        send('configure terminal')
+        res += readuntil('PN8600(config)#')
+        send(cmd)
+        rtcTime= readuntil('PN8600(config)#')
+        res+=rtcTime
+        if '%' in rtcTime :
+            raise Exception("set rtcTime error")
+        return True
+    except Exception,msg:
+        print msg
+        err = msg
+        return False
+
+def doDownload(type,file):
+    send('end')
+    res += readuntil('PN8600#')
+    send('download ' + type + ' ' + ftpIp + ' ' + ftpUserName + ' ' + ftpPassword + ' ' + file)
+    res += readuntil('PN8600#')
+    sleepT(10)
+    send('show file transfering-status')
+    fts = readuntil('PN8600#')
+    res +=fts
+    while 'successfully' not in fts :
+        if 'transfer failed' in fts :
+            raise Exception(file + " transfer failed")
+        sleepT(10)
+        send('show file transfering-status')
+        fts = readuntil('PN8600#')
+        res +=fts
+
+def downloadImage():
+    global res
+    res = "";
+    try:
+        doDownload('mpu','mpu.bin')
+        doDownload('mpubak','mpu.bin')
+        doDownload('epu','epu.bin')
+        doDownload('geu','geu.bin')
+        doDownload('xgu','xgu.bin')
+        doDownload('geu','geu.bin')
+        doDownload('bootrom','bootrom.bin')
+        return True
+    except Exception,msg:
+        print msg
+        err = msg
+        return False
+
+def upgradeBootrom():
+    global res
+    res = "";
+    try:
+        send('end')
+        res += readuntil('PN8600#')
+        send('show board')
+        boardInfo = readuntil(waitstr='PN8600#');
+        res +=boardInfo
+        bs = boardInfo.split('\r\r\n')
+        for s in bs :
+            if 'show board' in s :
+                continue
+            if 'Slot   Assign Type      Present Type     Admin Status     Operation Status' in s :
+                continue
+            if '------' in s :
+                continue
+            if 'Total:' in s :
+                continue
+            if '#' in s :
+                continue
+            #print s
+            slotid=s[2:4].strip()
+            assignType=s[9:13].strip()
+            presentType=s[26:33].strip()
+            adminStatus=s[43:46]
+            operationStatus=s[60:64]
+            #print slotid + ' ' + assignType + ' ' + presentType + ' ' + adminStatus + ' ' + operationStatus
+            if '*' in slotid :
+                slotid = slotid[0:1]
+            if operationStatus == 'IS':
+                cmd = 'upgrade bootrom slot ' + slotid
+                send(cmd)
+                upgraderesult = readuntil(waitstr='PN8600#');
+                res+=upgraderesult
+                if '%' in upgraderesult :
+                    raise Exception('slot ' + slotid + " upgrade bootrom failed")
+        return True
+    except Exception,msg:
+        print msg
+        err = msg
+        return False
+    
+def writefileandreboot():
+    global res
+    res = "";
+    try:
+        send('end')
+        res += readuntil('PN8600#')
+        print 'write file'
+        send('write file')
+        res += readuntil('Are you sure?(y/n) [n]')
+        send('y')
+        res += readuntil('PN8600#')
+        print 'system reboot'
+        send('system reboot')
+        res += readuntil('System will reboot!')
+        send('y')
+        res += readuntil('System now is rebooting,please wait.')
+        return True
+    except Exception,msg:
+        print msg
+        err = msg
+        return False
+
+
+mainBoard = '1'
+oosBoard = '1'
+def isAllBoardOnline():
+    global mainBoard
+    global oosBoard
+    send('show board')
+    boardInfo = readuntil(waitstr='PN8600#');
+    bs = boardInfo.split('\r\r\n')
+    length = len(bs) - 5
+    skip = [1]
+    if length==1:
+        skip = [1]
+    if length==3:
+        skip = [1]
+    if length==8:
+        skip = [4,5]
+    if length==18:
+        skip = [9,10]
+    for s in bs :
+        if 'show board' in s :
+            continue
+        if 'Slot   Assign Type      Present Type     Admin Status     Operation Status' in s :
+            continue
+        if '------' in s :
+            continue
+        if 'Total:' in s :
+            continue
+        if '#' in s :
+            continue
+        #print s
+        slotid=s[2:4].strip()
+        assignType=s[9:13].strip()
+        presentType=s[26:33].strip()
+        adminStatus=s[43:46].strip()
+        operationStatus=s[60:64].strip()          
+        if '*' in slotid :
+            slotid = slotid[0:1]
+            mainBoard = slotid
+        if assignType == '-':
+            continue
+        if int(slotid) in skip:
+            continue
+        #print slotid + ' ' + assignType + ' ' + presentType + ' ' + adminStatus + ' ' + operationStatus
+        if operationStatus == 'OOS':
+            oosBoard = slotid
+            print 'Board online error slotid is ' + slotid
+            return False
+    return True
+
+def boardInfo():
+    global res
+    global mainBoard
+    res = "";
+    try:
+        send('end')
+        res += readuntil('PN8600#')
+        while True:
+            sleepT(10)
+            if isAllBoardOnline():
+                break
+            oid = '1.3.6.1.4.1.17409.2.3.1.3.1.1.10.1.' + mainBoard
+            g = getCmd(SnmpEngine(),CommunityData('public'),UdpTransportTarget((obIp,161)),ContextData(),ObjectType(ObjectIdentity(oid)))
+            a = next(g)
+            msg = str(a[0])
+            if 'No SNMP response received before timeout' in msg :
+                raise Exception(msg)
+            if int(a[3][0].__getitem__(1)) > 30000 :
+                raise Exception('The inspection time is more than 5 minutes')
+        send('show board')
+        boardInfo = readuntil(waitstr='PN8600#');
+        res += boardInfo
+        bs = boardInfo.split('\r\r\n')
+        for s in bs :
+            if 'show board' in s :
+                continue
+            if 'Slot   Assign Type      Present Type     Admin Status     Operation Status' in s :
+                continue
+            if '------' in s :
+                continue
+            if 'Total:' in s :
+                continue
+            if '#' in s :
+                continue
+            #print s
+            slotid=s[2:4].strip()
+            assignType=s[9:13].strip()
+            presentType=s[26:33].strip()
+            adminStatus=s[43:46]
+            operationStatus=s[60:64]            
+            if '*' in slotid :
+                slotid = slotid[0:1]
+            if assignType == '-':
+                continue
+            #print slotid + ' ' + assignType + ' ' + presentType + ' ' + adminStatus + ' ' + operationStatus
+            cmd = 'show board ' + slotid
+            send(cmd)
+            res += readuntil(waitstr='PN8600#');
+        return True
+    except Exception,msg:
+        print msg
+        err = msg
+        return False
+
+def boardTemperature():
+    global res
+    global oosBoard
+    res = "";
+    try:
+        send('end')
+        res += readuntil('PN8600#')
+        if not isAllBoardOnline():
+            raise Exception('board online error ' + oosBoard)
+        send('show temperature all')
+        temperatureInfo = readuntil(waitstr='PN8600#');
+        res += temperatureInfo
+        bs = temperatureInfo.split('\r\r\n')
+        for s in bs :
+            if 'show temperature all' in s :
+                continue
+            if 'Slot Status Upper Lower Temperature.(C)' in s :
+                continue
+            if '------' in s :
+                continue
+            if '#' in s :
+                continue
+            #print s
+            slotid=s[0:1].strip()
+            temperature=s[20:26].strip()
+            #print slotid + ' ' + temperature
+            if temperature == '-':
+                continue
+            t = int(temperature)
+            if t < 25 or t > 65 :
+                raise Exception('Temperature error on slot ' + slotid + ' temperature is ' + temperature)
+        return True
+    except Exception,msg:
+        print msg
+        err = msg
+        return False
+
+eponType = ['epua','epub','epuc','meua','meub']
+eponPortNum = {'epua' : 8,'epub' : 8,'epuc' : 16,'meua' : 16,'meub' : 8}
+gponType = ['gpua']
+gponPortNum = {'gpua' : 16}
+
+def opticalModuleInfo():
+    global res
+    global oosBoard
+    res = "";
+    try:
+        send('end')
+        res += readuntil('PN8600#')
+        if not isAllBoardOnline():
+            raise Exception('board online error ' + oosBoard)
+        send('show board')
+        boardInfo = readuntil(waitstr='PN8600#');
+        res += boardInfo
+        send('configure terminal')
+        res += readuntil('PN8600(config)#')
+        bs = boardInfo.split('\r\r\n')
+        for s in bs :
+            if 'show board' in s :
+                continue
+            if 'Slot   Assign Type      Present Type     Admin Status     Operation Status' in s :
+                continue
+            if '------' in s :
+                continue
+            if 'Total:' in s :
+                continue
+            if '#' in s :
+                continue
+            #print s
+            slotid=s[2:4].strip()
+            assignType=s[9:13].strip()
+            presentType=s[26:33].strip()
+            adminStatus=s[43:46]
+            operationStatus=s[60:64]
+            #print slotid + ' ' + assignType + ' ' + presentType + ' ' + adminStatus + ' ' + operationStatus
+            if assignType in eponType:
+                #8602e 8602ef
+                if '*' in slotid :
+                    slotid = '0';
+                num = eponPortNum[assignType]
+                for i in range(1,num) :
+                    cmd = 'interface pon ' + slotid + '/' + str(i)
+                    send(cmd)
+                    res += readuntil('(config-if-pon-' + slotid + '/' + str(i) + ')#')
+                    send('show optical-transceiver')
+                    r = readuntil('(config-if-pon-' + slotid + '/' + str(i) + ')#')
+                    if '% Unknown command.' in r :
+                        send('show port optical-transceiver')
+                        r = readuntil('(config-if-pon-' + slotid + '/' + str(i) + ')#')
+                    res += r
+                    if '%optical-transceiver not exists or get infomation failed' in r :
+                        #raise Exception('optical-transceiver not exists or get infomation failed')
+                        print 'optical-transceiver ' + slotid + '/' + str(i) + ' not exists or get infomation failed'
+                        continue
+                    ots = r.split('\r\r\n')
+                    for ot in ots :
+                        vendorName='null'
+                        temperature='null'
+                        voltage='null'
+                        txPower='null'
+                        length = len(ot)
+                        if 'Vendor Name' in ot :
+                            vendorName = ot[33:length].strip()
+                            print 'optical-transceiver ' + slotid + '/' + str(i) + ' vendorName ' + vendorName
+                        if 'Temperature(C)' in ot :
+                            temperature = ot[33:length].strip()
+                            print 'optical-transceiver ' + slotid + '/' + str(i) + ' temperature ' + temperature
+                            t = float(temperature)
+                            if t < 25 or t > 60 :
+                                raise Exception('optical-transceiver ' + slotid + '/' + i + ' temperature error ' + temperature + 'C')
+                        if 'Voltage(mV)' in ot :
+                            voltage = ot[33:length].strip()
+                            print 'optical-transceiver ' + slotid + '/' + str(i) + ' voltage ' + voltage
+                            v = float(voltage)
+                            if v < 3150 or v > 3450 :
+                                raise Exception('optical-transceiver ' + slotid + '/' + i + ' voltage error ' + voltage + 'mV')
+                        if 'Tx power(dBm)' in ot :
+                            txPower = ot[33:length].strip()
+                            print 'optical-transceiver ' + slotid + '/' + str(i) + ' txPower ' + txPower
+                            tx = float(txPower)
+                            if tx < 2 or tx > 7 :
+                                raise Exception('optical-transceiver ' + slotid + '/' + i + ' txPower error ' + txPower + 'dBm')
+        return True
+    except Exception,msg:
+        print msg
+        err = msg
+        return False
+
+
+standards={'pn8601':[[2500,3800],[1700,3300],[1000,2300]],'pn8601mpub':[3000,3800],'pn8602':[[5000,7600],[4000,6000],[1500,5500]],'pn8603':[[5000,7600],[4000,6000],[1500,5500]],'pn8603mpub':[6500,7700],'pn8602e':[[11000,13000],[12000,14000],[15000,17000]]}
+
+def checkFanSpeed(standard):
+    global res
+    send('show fan status')
+    fanStates = readuntil('PN8600(config)#')
+    res += fanStates
+    states = fanStates.split('\r\r\n')
+    for s in states :
+        if 'Fan real speed' in s :
+            indexStart = s.index(':')
+            indexEnd = s.index('(rpm)')
+            if indexStart == -1 or indexEnd == -1 :
+                raise Exception('Read fan speed error')
+            print s
+            fs = s[indexStart + 1:indexEnd].strip()
+            fanSpeed = int(fs)
+            if fanSpeed < standard[0] or fanSpeed > standard[1] :
+                raise Exception('Read speed out of rang. standard:' + str(standard) + ' fanSpeed:' + str(fanSpeed))
+
+def fanInfo():
+    global res
+    global mainBoard
+    res = "";
+    try:
+        send('end')
+        res += readuntil('PN8600#')
+        send('show board')
+        boardInfo = readuntil(waitstr='PN8600#');
+        res += boardInfo
+        send('configure terminal')
+        res += readuntil('PN8600(config)#')
+        bs = boardInfo.split('\r\r\n')
+        for s in bs :
+            if 'show board' in s :
+                continue
+            if 'Slot   Assign Type      Present Type     Admin Status     Operation Status' in s :
+                continue
+            if '------' in s :
+                continue
+            if 'Total:' in s :
+                continue
+            if '#' in s :
+                continue
+            #print s
+            slotid=s[2:4].strip()
+            assignType=s[9:13].strip()
+            presentType=s[26:33].strip()
+            adminStatus=s[43:46]
+            operationStatus=s[60:64]    
+            if '*' in slotid :
+                oid = '1.3.6.1.2.1.1.2.0'
+                g = getCmd(SnmpEngine(),CommunityData('public'),UdpTransportTarget((obIp,161)),ContextData(),ObjectType(ObjectIdentity(oid)))
+                a = next(g)
+                msg = str(a[0])
+                if 'No SNMP response received before timeout' in msg :
+                    raise Exception(msg)
+                sysObjectId = a[3][0].__getitem__(1)  
+                if assignType == 'mpub':  
+                    if sysObjectId == '1.3.6.1.4.1.32285.11.2.1.1' :
+                        #8601
+                        send('fan speed high')
+                        res += readuntil('PN8600(config)#')
+                        sleepT(20)
+                        checkFanSpeed(standards['pn8601mpub']) 
+                    elif sysObjectId == '1.3.6.1.4.1.32285.11.2.1.3' :
+                        #8603
+                        send('fan speed high')
+                        res += readuntil('PN8600(config)#')
+                        sleepT(20)
+                        checkFanSpeed(standards['pn8603mpub'])
+                else :    
+                    if sysObjectId == '1.3.6.1.4.1.32285.11.2.1.1' :
+                        #8601
+                        send('fan speed high')
+                        res += readuntil('PN8600(config)#')
+                        sleepT(20)
+                        checkFanSpeed(standards['pn8601'][0]) 
+                        send('fan speed middle')
+                        res += readuntil('PN8600(config)#')
+                        sleepT(20)
+                        checkFanSpeed(standards['pn8601'][1]) 
+                        send('fan speed low')
+                        res += readuntil('PN8600(config)#')
+                        sleepT(20)
+                        checkFanSpeed(standards['pn8601'][2]) 
+                        send('fan speed auto')
+                        res += readuntil('PN8600(config)#')
+                    if sysObjectId == '1.3.6.1.4.1.32285.11.2.1.2' :
+                        #8602
+                        send('fan speed high')
+                        res += readuntil('PN8600(config)#')
+                        sleepT(20)
+                        checkFanSpeed(standards['pn8602'][0]) 
+                        send('fan speed middle')
+                        res += readuntil('PN8600(config)#')
+                        sleepT(20)
+                        checkFanSpeed(standards['pn8602'][1]) 
+                        send('fan speed low')
+                        res += readuntil('PN8600(config)#')
+                        sleepT(20)
+                        checkFanSpeed(standards['pn8602'][2]) 
+                        send('fan speed auto')
+                        res += readuntil('PN8600(config)#')
+                    elif sysObjectId == '1.3.6.1.4.1.32285.11.2.1.3' :
+                        #8603
+                        send('fan speed high')
+                        res += readuntil('PN8600(config)#')
+                        sleepT(20)
+                        checkFanSpeed(standards['pn8603'][0]) 
+                        send('fan speed middle')
+                        res += readuntil('PN8600(config)#')
+                        sleepT(20)
+                        checkFanSpeed(standards['pn8603'][1]) 
+                        send('fan speed low')
+                        res += readuntil('PN8600(config)#')
+                        sleepT(20)
+                        checkFanSpeed(standards['pn8603'][2]) 
+                        send('fan speed auto')
+                        res += readuntil('PN8600(config)#')
+                    else :
+                        #other
+                        send('fan speed high')
+                        res += readuntil('PN8600(config)#')
+                        sleepT(20)
+                        checkFanSpeed(standards['pn8602e'][0]) 
+                        send('fan speed middle')
+                        res += readuntil('PN8600(config)#')
+                        sleepT(20)
+                        checkFanSpeed(standards['pn8602e'][1]) 
+                        send('fan speed low')
+                        res += readuntil('PN8600(config)#')
+                        sleepT(20)
+                        checkFanSpeed(standards['pn8602e'][2]) 
+        return True
+    except Exception,msg:
+        print msg
+        err = msg
+        return False
+
+def powerTest():
+    global res
+    global oosBoard
+    res = "";
+    try:
+        print 'Power test'
+        send('end')
+        res += readuntil('PN8600#')
+        if not isAllBoardOnline():
+            raise Exception('board online error ' + oosBoard)
+        return True
+    except Exception,msg:
+        print msg
+        err = msg
+        return False
+

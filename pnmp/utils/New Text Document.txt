@@ -1,0 +1,11 @@
+
+t = UpgradeOlt()
+t.connect('172.17.2.150','suma','suma','172.17.2.2','c','c')
+
+
+select e.ip,(select value from systempreferences where name = 'telnetUserName') as globalUsername 
+,(select value from systempreferences where name = 'telnetPassword') as globalPassword
+,(select value from systempreferences where name = 'telnetEnablePassword') as globalEnablePassword
+,(select value from systempreferences where name = 'telnetIsAAA') as globalIsAAA,tlc.username,tlc.password,tlc.enablePassword,tlc.isAAA from entity e 
+LEFT JOIN telnetloginconfig tlc on e.ip = tlc.ipString
+where e.typeId in (select typeId from entitytyperelation where type = 10000) 

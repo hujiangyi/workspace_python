@@ -1,0 +1,70 @@
+close()
+execfile("deliverTest.py")
+connect()
+
+sendF2()
+print result()
+
+mpuStarted()
+print result()
+
+assignBoard()
+print result()
+
+outbandIp()
+print result()
+
+rtcTime()
+print result()
+
+writefileandreboot()
+print result()
+
+eraseandreboot()
+print result()
+
+boardInfo()
+print result()
+
+boardTemperature()
+print result()
+
+opticalModuleInfo()
+print result()
+
+fanInfo()
+print result()
+
+send('@')
+print read()
+
+send('show board')
+print read()
+
+send('')
+print read()
+
+send('exit')
+print read()
+
+send('configure terminal')
+send('board reset  3')
+send('y')
+print read()
+
+boot device          : tffs=0
+unit number          : 0
+processor number     : 0
+host name            : host
+file name            : /tffs0/app/mpu.bin
+inet on ethernet (e) : 224.1.1.255
+host inet (h)        : 192.168.1.200
+user (u)             : suma
+ftp password (pw)    : sumavision
+flags (f)            : 0x0
+target name (tn)     : ads8308
+other (o)            : mottsec0
+
+
+
+1712PN86030030001
