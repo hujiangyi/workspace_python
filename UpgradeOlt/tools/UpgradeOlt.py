@@ -810,6 +810,8 @@ class UpgradeOlt(Thread):
         self.readuntil('(config-if-ccmts-1/1/1)#')
         self.send('exit')
         self.readuntil('(config)#')
+        self.send('no ip address dhcp-alloc')
+        self.readuntil('(config)#')
         self.send('ip address ' + cmIp + ' ' + self.mask + ' primary')
         self.readuntil('(config)#')
         if self.cmgateway != None:
