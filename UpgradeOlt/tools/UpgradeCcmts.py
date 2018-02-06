@@ -71,34 +71,41 @@ class UpgradeCcmts(UpgradeOlt):
                         for device in deviceList:
                             key = '{}/{}/{}'.format(slot,port,device)
                             nversion = self.allVersion[key]
-                            if nversion == None or nversion == 'no version' or nversion == '':
-                                continue
-                            if nversion == self.version :
-                                continue
-                            upgradeCmts.append(key)
-                            while True:
-                                for t in upgradeThreads:
-                                    if not t.isAlive():
-                                        state,msg = t.getUpgradeResult()
-                                        if not state :
-                                            self.log(msg)
-                                            #self.writeResult(msg)
-                                            self.faildCount = self.faildCount + 1
-                                        else :
-                                            self.successCount = self.successCount + 1
-                                        upgradeThreads.remove(t)
+                            if nversion != None and nversion != 'no version' and nversion != '' and nversion != self.version:
+                                upgradeCmts.append(key)
+                                while True:
+                                    for t in upgradeThreads:
+                                        if not t.isAlive():
+                                            state,msg = t.getUpgradeResult()
+                                            if not state :
+                                                self.log(msg)
+                                                #self.writeResult(msg)
+                                                self.faildCount = self.faildCount + 1
+                                            else :
+                                                self.successCount = self.successCount + 1
+                                            upgradeThreads.remove(t)
+                                            break
+                                    if len(upgradeThreads) < self.threadNum :
+                                        configCcmtsIp = ConfigCcmtsIp()
+                                        configCcmtsIp.connect(self,self.host, self.isAAA, self.userName, self.password, self.enablePassword, self.cmip, self.mask,
+                                                             self.cmgateway, vlan, gateway,
+                                                             ftpServer,slot,port,device)
+                                        configCcmtsIp.setDaemon(True)
+                                        configCcmtsIp.start()
+                                        upgradeThreads.append(configCcmtsIp)
                                         break
-                                if len(upgradeThreads) < self.threadNum :
-                                    configCcmtsIp = ConfigCcmtsIp()
-                                    configCcmtsIp.connect(self,self.host, self.isAAA, self.userName, self.password, self.enablePassword, self.cmip, self.mask,
-                                                         self.cmgateway, vlan, gateway,
-                                                         ftpServer,slot,port,device)
-                                    configCcmtsIp.setDaemon(True)
-                                    configCcmtsIp.start()
-                                    upgradeThreads.append(configCcmtsIp)
-                                    break
-                                else :
-                                    time.sleep(10)
+                                    else :
+                                        time.sleep(10)
+                            else :
+                                row = {"identifyKey": "ip",
+                                       "ip": slot + '/' + port + '/' + device,
+                                       "result": "start",
+                                       "isAAA": self.isAAA == '1',
+                                       "userName": self.userName,
+                                       "password": self.password,
+                                       "enablePassword": self.enablePassword}
+                                self.listView.insertChildRow(self.host,row)
+                                self.listView.setData('{}_{}'.format(self.host, key), 'result', nversion)
                     else :
                         self.log(msg)
                         #self.writeResult(msg)

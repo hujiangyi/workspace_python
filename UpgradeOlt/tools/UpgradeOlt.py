@@ -943,6 +943,8 @@ class UpgradeOlt(Thread):
             nbArray,nbKeys,allVersion = self.getAllOnlineCmts()
             self.log('online cmts count before reset(' + `len(bKeys)` + ') after reset(' + `len(nbKeys)` + ')')
             if len(bKeys) == len(nbKeys) :
+                for key,version in allVersion.items():
+                    self.listView.setData('{}_{}'.format(self.host,key), 'result', version)
                 break
             time.sleep(30)
 
