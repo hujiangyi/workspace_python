@@ -53,6 +53,9 @@ def closeDialog():
     if imageFileNameStr == None or imageFileNameStr.get() == '':
         showerror('error','imageFileName can not be null')
         return
+    if threadNumStr == None or threadNumStr.get() == '':
+        showerror('error','threadNum can not be null')
+        return
     root.destroy()
     doUpgradeMud()
 
@@ -78,6 +81,8 @@ def doUpgradeMud():
     ftpUserName = ftpUserNameStr.get()
     ftpPassword = ftpPasswordStr.get()
     imageFileName = imageFileNameStr.get()
+    threadNum = threadNumStr.get()
+    version = versionStr.get()
 
     logPath = './log/' + datetime.datetime.now().strftime('%Y%m%d%H%M%S') + '/'
     os.makedirs(logPath)
@@ -108,7 +113,7 @@ def doUpgradeMud():
             cmgateway = sheetR.cell(i, 7).value
             upgradeCcmts = UpgradeCcmts()
             upgradeCcmts.connect(ip, isAAA, username, password, enablePassword,cmip,mask,cmgateway, logPath, sheetW, i, cvlan, gateway,
-                                 ftpServer, ftpUserName, ftpPassword, imageFileName,listView)
+                                 ftpServer, ftpUserName, ftpPassword, imageFileName,int(threadNum),version,listView)
             upgradeCcmts.setDaemon(True)
             upgradeCcmts.start()
     resultDialog.mainloop()
@@ -123,12 +128,16 @@ ftpServerStr = StringVar()
 ftpUserNameStr = StringVar()
 ftpPasswordStr = StringVar()
 imageFileNameStr = StringVar()
+threadNumStr = StringVar()
+versionStr = StringVar()
 cvlanStr.set('500')
 gatewayStr.set('50')
-ftpServerStr.set('172.17.2.2')
+ftpServerStr.set('10.30.30.242')
 ftpUserNameStr.set('c')
 ftpPasswordStr.set('c')
 imageFileNameStr.set('c.bin')
+threadNumStr.set('10')
+versionStr.set('')
 
 row = 0
 row = rowView(row,'OltExcel',oltExcelPath,fun=selectOltExcelPath)
@@ -138,5 +147,7 @@ row = rowView(row,'Ftp Server',ftpServerStr)
 row = rowView(row,'Ftp Username',ftpUserNameStr)
 row = rowView(row,'Ftp Password',ftpPasswordStr)
 row = rowView(row,'Image Name',imageFileNameStr)
+row = rowView(row,'Thread count',threadNumStr)
+row = rowView(row,'Target version',versionStr)
 Button(root,text='complte',command=closeDialog).grid(row=row,column=1)
 root.mainloop()

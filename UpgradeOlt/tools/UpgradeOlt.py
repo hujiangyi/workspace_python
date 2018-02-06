@@ -61,14 +61,20 @@ class UpgradeOlt(Thread):
         else :
             self.useNetRange = True
             self.ips = IP(self.cmip + '/' + self.mask)
-            self.ipsIndex = 0
+            self.ipsIndex = -1
+            self.ipsIndexLock = Lock()
     def nextIp(self):
-        self.ipsIndex = self.ipsIndex + 1
-        return self.ips[self.ipsIndex].strCompressed()
+        self.ipsIndexLock.acquire()
+        try:
+            self.ipsIndex = self.ipsIndex + 1
+            return self.ips[self.ipsIndex].strCompressed()
+        finally:
+            self.ipsIndexLock.release()
     def initLog(self,logPath,host):
         self.logPath = logPath
         self.cmdResultFile = open(logPath + host + "CmdResult.log", "w")
         self.logResultFile = open(logPath + host + "logFile.log", "w")
+
     def initListView(self,listView):
         self.listView = listView
     def initExcel(self,sheetW,excelRow):
@@ -729,126 +735,28 @@ class UpgradeOlt(Thread):
         else:
             return True,''
 
-    def doConfigCcmts(self,vlan,gateway,ftpServer,slot,port,device):
-        row = {"identifyKey": "ip",
-               "ip": slot + '/' + port + '/' + device,
-               "result": "start",
-               "isAAA": self.isAAA == '1',
-               "userName": self.userName,
-               "password": self.password,
-               "enablePassword": self.enablePassword}
-        self.listView.insertChildRow(self.host,row)
-        self.log('configCcmts vlan '+ vlan + ' ' + slot + '/' + port + '/' + device,cmts=slot + '/' + port + '/' + device)
-        self.send('end')
-        self.readuntil('#')
-        self.send('configure terminal')
-        self.readuntil('(config)#')
-        self.send('interface ccmts ' + slot + '/' + port + '/' + device)
-        self.readuntil('(config-if-ccmts-' + slot + '/' + port + '/' + device + ')#')
-        self.send('onu-ipconfig ip-address ' + gateway + '.' + slot + '.' + port + '.' + device +  ' mask 255.0.0.0 gateway ' + gateway + '.254.0.1 cvlan ' + vlan)
-        self.readuntil('(config-if-ccmts-' + slot + '/' + port + '/' + device + ')#')
-        self.send('telnet ' + gateway + '.' + slot + '.' + port + '.' + device)
-        re = self.readuntilMutl(['Username:','username:','%Telnet exit successful','%Connect to ' + gateway + '.' + slot + '.' + port + '.' + device + ' timeout!'])
-        if '%Telnet exit successful' in re:
-            self.log('%Telnet exit successful',cmts=slot + '/' + port + '/' + device)
-            return False,'%Telnet exit successful'
-        elif '%Connect to ' + gateway + '.' + slot + '.' + port + '.' + device + ' timeout!' in re:
-            self.log('%Connect to ' + gateway + '.' + slot + '.' + port + '.' + device + ' timeout!',cmts=slot + '/' + port + '/' + device)
-            return False,'%Connect to ' + gateway + '.' + slot + '.' + port + '.' + device + ' timeout!'
-        self.send('admin')
-        self.send('admin')
-        self.send('enable')
-        re = self.readuntilII('#')
-        cmIp = None
-        if not self.useNetRange :
-            self.send('show cable modem | include online')
-            re = self.readuntil('#')
-            lines = re.split('\r\n')
-            if len(lines) > 1  and "online" in lines[1]:
-                cols = lines[1].split()
-                cmIp = cols[1]
-                self.cmgateway = None
-                self.log('cmts ip is ' + cmIp, cmts=slot + '/' + port + '/' + device)
-                state,msg = self.configCmtsIp(cmIp, ftpServer,slot,port,device)
-            else:
-                self.log('cmts does not specify.', cmts=slot + '/' + port + '/' + device)
-                return False, 'cmts does not specify.'
-        else :
-            cmIp = self.nextIp()
-            while True:
-                if cmIp == self.cmgateway :
-                    cmIp = self.nextIp()
-                r = ping(cmIp)
-                if r.ret_code == 0 :
-                    cmIp = self.nextIp()
-                else:
-                    break
-            self.log('cmts ip is ' + cmIp, cmts=slot + '/' + port + '/' + device)
-            state,msg = self.configCmtsIp(cmIp,ftpServer,slot,port,device)
-            while not state:
-                cmIp = self.nextIp()
-                state, msg = self.configCmtsIp(cmIp, ftpServer,slot,port,device)
-        self.send('exit')
-        self.readuntil('>')
-        self.send('exit')
-        self.send('')
-        self.readuntil('#')
-        return state,msg
-
-
-    def configCmtsIp(self,cmIp,ftpServer,slot,port,device):
-        key = '{}/{}/{}'.format(slot,port,device)
-        self.send('end')
-        self.readuntil('#')
-        self.send('configure terminal')
-        self.readuntil('(config)#')
-        self.send('interface ccmts 1/1/1')
-        self.readuntil('(config-if-ccmts-1/1/1)#')
-        self.send('cable upstream 1-4 shutdown')
-        self.readuntil('(config-if-ccmts-1/1/1)#')
-        self.send('cable downstream 1-16 shutdown')
-        self.readuntil('(config-if-ccmts-1/1/1)#')
-        self.send('exit')
-        self.readuntil('(config)#')
-        self.send('no ip address dhcp-alloc')
-        self.readuntil('(config)#')
-        self.send('ip address ' + cmIp + ' ' + self.mask + ' primary')
-        self.readuntil('(config)#')
-        if self.cmgateway != None:
-            self.send('gateway ' + self.cmgateway + '')
-            self.readuntil('(config)#')
-        self.send('super')
-        self.readuntilII('Password:')
-        self.send('8ik,(OL>')
-        self.readuntil('(config-super)#')
-        self.send('shell')
-        self.readuntil('#')
-        self.send('ping ' + ftpServer)
-        self.readuntil('#')
-        self.send('echo $?')
+    def getCcmtsVersion(self,key):
+        cmd = 'show ccmts version | include C{}\\b'.format(key)
+        self.send(cmd)
         re = self.readuntil('#')
-        self.send('exit')
-        self.readuntil('#')
-        self.send('exit')
-        self.readuntil('#')
-        self.send('exit')
-        self.readuntil('#')
         lines = re.split('\r\n')
-        for s in lines:
-            if 'echo $?' in s:
+        for line in lines:
+            if '' == line.strip():
                 continue
-            if '#' in s:
+            if 'show ccmts version' in line:
                 continue
-            if '0' == s:
-                self.log('{}config success!cmIp:{}'.format(key,cmIp), cmts=slot + '/' + port + '/' + device)
-                return True, ''
-            else:
-                self.log('{}ftp server can not connect.cmIp:{}'.format(key,cmIp), cmts=slot + '/' + port + '/' + device)
-                return False, '{}ftp server can not connect.cmIp:{}'.format(key,cmIp)
-
+            if 'Filtering...' in line:
+                continue
+            if '#' in line:
+                continue
+            cols = line.split()
+            return cols[2]
+        return 'no version'
 
     def getAllOnlineCmts(self,raiseException=False):
         allCmts = {}
+        allVersion = {}
+        allKey = []
         self.log('getAllOnlineCmts')
         self.send('end')
         self.readuntil('#')
@@ -869,6 +777,12 @@ class UpgradeOlt(Thread):
             slot = nums[0][1:len(nums[0])]
             port = nums[1]
             device = nums[2]
+            key = '{}/{}/{}'.format(slot,port,device)
+            if not allKey.__contains__(key) :
+                allKey.append(key)
+            version = self.getCcmtsVersion(key)
+            self.log('{}:{}'.format(key,version))
+            allVersion[key] = version
             #print slot,port,device
             portMap = {}
             if allCmts.has_key(slot):
@@ -885,42 +799,8 @@ class UpgradeOlt(Thread):
             self.log('No CMTS is on the OLT.')
             if raiseException :
                 raise Exception('No CMTS is on the OLT.')
-        return allCmts
+        return allCmts,allKey,allVersion
 
-
-    def mduUpgrade(self,vlan,gateway,ftpServer,ftpUsername,ftpPassword,imageFileName):
-        self.log('mduUpgrade')
-        self.allCmts = self.getAllOnlineCmts(raiseException=True)
-        self.successCount = 0
-        self.faildCount = 0
-        state,msg = self.confgVlan(vlan,gateway)
-        if state :
-            for slot,portMap in self.allCmts.items():
-                for port,deviceList in portMap.items():
-                    state,msg = self.doConfigPon(vlan,slot,port)
-                    if state :
-                        for device in deviceList:
-                            state,msg = self.doConfigCcmts(vlan,gateway,ftpServer,slot,port,device)
-                            if not state :
-                                self.log(msg)
-                                #self.writeResult(msg)
-                                self.faildCount = self.faildCount + 1
-                            else :
-                                self.successCount = self.successCount + 1
-                    else :
-                        self.log(msg)
-                        #self.writeResult(msg)
-        else :
-            self.log(msg)
-            #self.writeResult(msg)
-        self.send('end')
-        self.readuntil('#')
-        self.send('configure terminal')
-        self.readuntil('(config)#')
-        self.send('upgrade mdu image ftp ' + ftpServer + ' ' + ftpUsername + ' ' + ftpPassword + ' ' + imageFileName)
-        self.readuntil('Upgrade software image of all mdu device? (y/n) [n]')
-        self.send('y')
-        self.readuntil('(config)#')
     def checkCmtsUpgradeStatus(self,slot,port,device):
         key = '{}/{}/{}'.format(slot,port,device)
         self.send('end')
@@ -949,12 +829,15 @@ class UpgradeOlt(Thread):
         return False,False,''
     def checkAllUpgradeStatus(self):
         self.log('checkAllUpgradeStatus')
+        allKey = []
         upgradeStatus = {}
         while True:
             for slot,portMap in self.allCmts.items():
                 for port,deviceList in portMap.items():
                     for device in deviceList:
                         key =  '{}/{}/{}'.format(slot,port,device)
+                        if not allKey.__contains__(key) :
+                            allKey.append(key)
                         if not upgradeStatus.has_key(key) :
                             state,finish,result = self.checkCmtsUpgradeStatus(slot,port,device)
                             if state:
@@ -967,7 +850,8 @@ class UpgradeOlt(Thread):
                                 else :
                                     self.log('{} upgrade not finish{}'.format(key,result),cmts=slot + '/' + port + '/' + device)
             time.sleep(30)
-            if len(self.allCmts) == len(upgradeStatus):
+            self.log('allKey:{};upgradeStatus{}'.format(len(allKey),len(upgradeStatus)))
+            if len(allKey) == len(upgradeStatus):
                 return
 
 
@@ -1037,10 +921,7 @@ class UpgradeOlt(Thread):
                     self.send('reset')
                     self.readuntil('(config-if-ccmts-{})#'.format(key))
     def clearConfig(self,vlan):
-        self.log('mduUpgrade',headName='clearResult')
-        bArray = self.getAllOnlineCmts()
-        self.log('online cmts count(' + `len(bArray)` + ')')
-        self.resetCmts()
+        self.log('clearConfig',headName='clearResult')
         for slot,portMap in self.allCmts.items():
             for port,deviceList in portMap.items():
                 #for device in deviceList:
@@ -1053,11 +934,17 @@ class UpgradeOlt(Thread):
         state,msg = self.doClearVlanConfig(vlan)
         if not state:
             self.writeResult(msg)
+    def doResetCmts(self):
+        self.log('doResetCmts',headName='clearResult')
+        bArray,bKeys,allVersion = self.getAllOnlineCmts()
+        self.log('online cmts count(' + `len(bKeys)` + ')')
+        self.resetCmts()
         while True:
-            nbArray = self.getAllOnlineCmts()
-            self.log('online cmts count before reset(' + `len(bArray)` + ') after reset(' + `len(nbArray)` + ')')
-            if len(bArray) == len(nbArray) :
+            nbArray,nbKeys,allVersion = self.getAllOnlineCmts()
+            self.log('online cmts count before reset(' + `len(bKeys)` + ') after reset(' + `len(nbKeys)` + ')')
+            if len(bKeys) == len(nbKeys) :
                 break
+            time.sleep(30)
 
 
 
