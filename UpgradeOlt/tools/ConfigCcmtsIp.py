@@ -36,6 +36,7 @@ class ConfigCcmtsIp(UpgradeOlt):
         row = {"identifyKey": "ip",
                "ip": slot + '/' + port + '/' + device,
                "result": "start",
+               "clearResult": "",
                "isAAA": self.isAAA == '1',
                "userName": self.userName,
                "password": self.password,
@@ -84,12 +85,16 @@ class ConfigCcmtsIp(UpgradeOlt):
                 r = ping(cmIp)
                 if r.ret_code == 0 :
                     cmIp = self.parent.nextIp()
+                    if cmIp == self.cmgateway:
+                        cmIp = self.parent.nextIp()
                 else:
                     break
             self.parent.log('cmts ip is ' + cmIp, cmts=slot + '/' + port + '/' + device)
             state,msg = self.configCmtsIp(cmIp,ftpServer,slot,port,device)
             while not state:
                 cmIp = self.parent.nextIp()
+                if cmIp == self.cmgateway :
+                    cmIp = self.parent.nextIp()
                 state, msg = self.configCmtsIp(cmIp, ftpServer,slot,port,device)
         self.send('exit')
         self.readuntil('>')

@@ -61,7 +61,7 @@ class UpgradeOlt(Thread):
         else :
             self.useNetRange = True
             self.ips = IP(self.cmip + '/' + self.mask)
-            self.ipsIndex = -1
+            self.ipsIndex = 0
             self.ipsIndexLock = Lock()
     def nextIp(self):
         self.ipsIndexLock.acquire()
@@ -849,10 +849,10 @@ class UpgradeOlt(Thread):
                                     self.log('{} upgrade state :{}'.format(key,state),cmts=slot + '/' + port + '/' + device)
                                 else :
                                     self.log('{} upgrade not finish{}'.format(key,result),cmts=slot + '/' + port + '/' + device)
-            time.sleep(30)
             self.log('allKey:{};upgradeStatus{}'.format(len(allKey),len(upgradeStatus)))
             if len(allKey) == len(upgradeStatus):
                 return
+            time.sleep(30)
 
 
 

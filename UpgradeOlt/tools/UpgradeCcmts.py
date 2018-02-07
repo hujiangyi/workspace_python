@@ -100,6 +100,7 @@ class UpgradeCcmts(UpgradeOlt):
                                 row = {"identifyKey": "ip",
                                        "ip": slot + '/' + port + '/' + device,
                                        "result": "start",
+                                       "clearResult": "",
                                        "isAAA": self.isAAA == '1',
                                        "userName": self.userName,
                                        "password": self.password,
