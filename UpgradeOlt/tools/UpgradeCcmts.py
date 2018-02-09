@@ -23,7 +23,7 @@ class UpgradeCcmts(UpgradeOlt):
                 self.checkAllUpgradeStatus()
                 self.doResetCmts()
                 self.clearConfig(self.vlan)
-                self.writeResult('cmts count[' + `len(self.allCmts)` + '] success[' + `self.successCount` + '] faild[' + `self.faildCount` + ']' )
+                self.writeResult('cmts count[' + `len(self.allkey)` + '] success[' + `self.successCount` + '] faild[' + `self.faildCount` + ']' )
             else :
                 self.clearConfig(self.vlan)
                 self.writeResult('no cmts upgraded')

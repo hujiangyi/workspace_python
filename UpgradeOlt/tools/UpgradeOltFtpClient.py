@@ -24,13 +24,18 @@ class UpgradeOltFtpClient(UpgradeOlt):
             self.doStep(4,self.loginIntoFtp)
             isActiveAndStandby,mainFile,otherFiles = self.allImageTypeAndFileName()
             if mainFile == 'mpub':
-                self.doStep(5,self.downloadImage,args=[isActiveAndStandby,mainFile,otherFiles])
-                # for olt version 1.9.0  after download all image must reconnect telnet
-                self.reconnect()
-                self.doStep(6,self.syncFile)
-                self.doStep(7,self.upgradeServiceBootrom())
-                self.doStep(8,self.rebootOlt)
-                self.doStep(9,self.upgradeMpubBootrom)
+                compareState = self.checkBootromVersion()
+                if compareState:
+                    self.log('main board bootrom version is the same')
+                    self.doStep(5,self.downloadImage,args=[isActiveAndStandby,mainFile,otherFiles])
+                    # for olt version 1.9.0  after download all image must reconnect telnet
+                    self.reconnect()
+                    self.doStep(6,self.syncFile)
+                    self.doStep(7,self.upgradeServiceBootrom)
+                    self.doStep(8,self.rebootOlt)
+                    self.doStep(9,self.upgradeMpubBootrom)
+                else:
+                    self.log('main board bootrom version error')
             else:
                 self.doStep(5,self.downloadImage,args=[isActiveAndStandby,mainFile,otherFiles])
                 # for olt version 1.9.0  after download all image must reconnect telnet
@@ -39,6 +44,7 @@ class UpgradeOltFtpClient(UpgradeOlt):
                 self.doStep(6,self.syncFile)
                 self.doStep(7,self.upgradeAllBootrom)
             self.doStep(10,self.rebootOlt)
+            self.doStep(11,self.collectData,args=['after'])
             self.writeResult('upgrade success')
         except BaseException, msg:
             if 'An established connection was aborted by the software in your host machine' in msg:
@@ -128,6 +134,10 @@ class UpgradeOltFtpClient(UpgradeOlt):
             if info != '226 Transfer complete':
                 raise Exception("upload image file error[" + file + ']')
         else :
+            fileList = self.ftp.nlst()
+            self.log(`fileList`)
+            if file in fileList:
+                self.log(self.ftp.delete(file))
             self.log('upload image file[' + filePath + '] not exists.')
 
     def downloadImage(self,isActiveAndStandby,mainFile,otherFiles):
@@ -144,5 +154,61 @@ class UpgradeOltFtpClient(UpgradeOlt):
             self.writeResult(`msg`)
             return False
 
+    def getBootromVersion(self,slot):
+        self.send('end')
+        self.readuntil('#')
+        self.send('show board {}'.format(slot))
+        re = self.readuntil('#')
+        lines = re.split('\r\n')
+        operationStatus = None
+        bootromVersion = None
+        for line in lines:
+            if 'Operation status' in line:
+                cols = line.split(':')
+                if len(cols) == 2:
+                    operationStatus = cols[1].strip()
+            if 'Bootrom version' in line:
+                cols = line.split(':')
+                if len(cols) == 2:
+                    bootromVersion = cols[1].strip()
+        return operationStatus,bootromVersion
+
+    def doCheckBootromVersion(self,allBoard,slots):
+        versions = {}
+        for board in allBoard:
+            slotStr = board[0]
+            if '*' in board[0]:
+                slotStr = slotStr[0:len(slotStr) - 1]
+            slot = int(slotStr)
+            if slot in slots:
+                operationStatus,bootromVersion = self.getBootromVersion(slot)
+                if operationStatus == 'IS':
+                    versions[slot] = bootromVersion
+        for slot in slots:
+            if not versions.__contains__(slot):
+                return True
+        firstVersion = versions[slots[0]]
+        for slot,version in versions.items():
+            if firstVersion != version:
+                return False
+        return True
+
+    def checkBootromVersion(self):
+        self.log('checkBootromVersion')
+        try:
+            sysObjectId = self.getSysObjectId()
+            if sysObjectId ==  '1.3.6.1.4.1.32285.11.2.1.1':
+                allBoard = self.allBoard()
+                slots = [9,10]
+                return self.doCheckBootromVersion(allBoard,slots)
+            elif sysObjectId ==  '1.3.6.1.4.1.32285.11.2.1.3':
+                allBoard = self.allBoard()
+                slots = [4,5]
+                return self.doCheckBootromVersion(allBoard,slots)
+            return True
+        except Exception, msg:
+            self.log(`msg`)
+            self.writeResult(`msg`)
+            return False
 
 

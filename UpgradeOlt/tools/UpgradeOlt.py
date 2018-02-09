@@ -217,12 +217,13 @@ class UpgradeOlt(Thread):
     def getMainBoardTypes(self):
         return ['mpu', 'mpub', 'meu', 'mef', 'mgu']
 
-    def checkCmd(self,cmds):
+    def checkCmd(self,cmds,errorMessage='% Unknown command.'):
         for cmd in cmds:
             self.send(cmd)
             re = self.readuntil('#')
-            if '% Unknown command.' not in re:
+            if errorMessage not in re :
                 return cmd,re
+        return None,re
 
     def cmdExists(self,checkCmd,default):
         runCmd = 'list | include ' + checkCmd
@@ -262,6 +263,7 @@ class UpgradeOlt(Thread):
     def downloadImage(self):
         return False
     def allBoard(self):
+        self.log('get all board')
         self.send('show board | include IS')
         re = self.readuntil('#')
         bs = re.split('\r\n')
@@ -276,7 +278,7 @@ class UpgradeOlt(Thread):
             if s == '':
                 continue
             cols = s.split()
-            if cols[4] == 'IS':
+            if len(cols) == 5 and cols[4] == 'IS':
                 bArray.append(cols)
         return bArray
     def rebootOlt(self):
@@ -319,6 +321,10 @@ class UpgradeOlt(Thread):
                     break
                 if compare :
                     break
+                else:
+                    time.sleep(10)
+            else:
+                time.sleep(10)
         self.log('rebootOlt success ')
 
     def flashType(self):
@@ -437,7 +443,7 @@ class UpgradeOlt(Thread):
             if needSize >= freeSize:
                 raise Exception("checkFreeSize error")
 
-    def allImageTypeAndFileName(self):
+    def getSysObjectId(self):
         self.send('end')
         self.readuntil('#')
         self.send('show system')
@@ -461,6 +467,12 @@ class UpgradeOlt(Thread):
                     sysObjectId = '1.3.6.1.4.1.32285.11.2.1.1'
                 else:
                     sysObjectId = '1.3.6.1.4.1.32285.11.2.1.2.x'
+        return sysObjectId
+
+    def allImageTypeAndFileName(self):
+        self.send('end')
+        self.readuntil('#')
+        sysObjectId = self.getSysObjectId()
         self.send('show board')
         boardInfo = self.readuntil(waitstr='#')
         # self.log(boardInfo)
@@ -489,7 +501,7 @@ class UpgradeOlt(Thread):
                 if sysObjectId == '1.3.6.1.4.1.32285.11.2.1.1':
                     #8601
                     if assignType == 'mpub':
-                        return True,'mpub',['epu','geu','gpu','xgu','bootrom','bootrom-e500']
+                        return True,'mpub',['epu','geu','gpu','xgu','bootrom','bootrom-e500','bootrom_mpub']
                     else:
                         return True,'mpu',['epu','geu','gpu','xgu','bootrom','bootrom-e500']
                 if sysObjectId == '1.3.6.1.4.1.32285.11.2.1.2':
@@ -498,7 +510,7 @@ class UpgradeOlt(Thread):
                 elif sysObjectId == '1.3.6.1.4.1.32285.11.2.1.3':
                     #8603
                     if assignType == 'mpub':
-                        return True,'mpub',['epu','geu','gpu','xgu','bootrom','bootrom-e500']
+                        return True,'mpub',['epu','geu','gpu','xgu','bootrom','bootrom-e500','bootrom_mpub']
                     else:
                         return True,'mpu',['epu','geu','gpu','xgu','bootrom','bootrom-e500']
                 else:
@@ -524,6 +536,8 @@ class UpgradeOlt(Thread):
                 self.sleepT(10)
                 self.send(cmd)
                 tmp += self.read()
+            self.sleepT(3)
+            tmp += self.read()
             self.log('sync app file')
             self.send('sync app file')
             self.readuntil('Are you sure?(y/n) [n]')
@@ -536,6 +550,7 @@ class UpgradeOlt(Thread):
                 self.send(cmd)
                 tmp += self.read()
             self.sleepT(3)
+            tmp += self.read()
             self.writeResult('syncFile success')
         else:
             self.log('syncFile error:' + re)
@@ -543,6 +558,7 @@ class UpgradeOlt(Thread):
 
     ###################################################upgrade##########################################################
     def upgradeAllBootrom(self):
+        self.log('upgradeAllBootrom')
         try:
             self.send('end')
             self.readuntil('#')
@@ -579,13 +595,14 @@ class UpgradeOlt(Thread):
                         self.send(cmd)
                         upgraderesult = self.readuntil(waitstr='#')
                         self.log(upgraderesult)
-            self.writeResult('syncFile success')
+            self.writeResult('upgradeAllBootrom success')
             return True
         except Exception, msg:
             self.log(`msg`)
             self.writeResult(`msg`)
             return False
     def upgradeMpubBootrom(self):
+        self.log('upgradeMpubBootrom')
         try:
             self.send('end')
             self.readuntil('#')
@@ -625,13 +642,14 @@ class UpgradeOlt(Thread):
                         self.send(cmd)
                         upgraderesult = self.readuntil(waitstr='#')
                         self.log(upgraderesult)
-            self.writeResult('syncFile success')
+            self.writeResult('upgradeMpubBootrom success')
             return True
         except Exception, msg:
             self.log(`msg`)
             self.writeResult(`msg`)
             return False
     def upgradeServiceBootrom(self):
+        self.log('upgradeServiceBootrom')
         try:
             self.send('end')
             self.readuntil('#')
@@ -668,7 +686,7 @@ class UpgradeOlt(Thread):
                         self.send(cmd)
                         upgraderesult = self.readuntil(waitstr='#')
                         self.log(upgraderesult)
-            self.writeResult('syncFile success')
+            self.writeResult('upgradeServiceBootrom success')
             return True
         except Exception, msg:
             self.log(`msg`)
@@ -726,14 +744,17 @@ class UpgradeOlt(Thread):
         self.readuntil('#')
         self.send('configure terminal')
         self.readuntil('(config)#')
-        self.send('interface pon ' + slot + '/' + port)
-        self.readuntil('(config-if-pon-' + slot + '/' + port +')#')
-        self.send('vlan batch ' + vlan + ' transparent')
-        re = self.readuntil('(config-if-pon-' + slot + '/' + port +')#')
-        if '%' in re:
+        cmds = ['interface pon {}/{}'.format(slot,port),'interface gpon {}/{}'.format(slot,port)]
+        cmd,re = self.checkCmd(cmds,errorMessage= 'interface number error.')
+        if cmd != None:
+            self.send('vlan batch ' + vlan + ' transparent')
+            re = self.readuntil('{}/{})#'.format(slot,port))
+            if '%' in re:
+                return False,re
+            else:
+                return True,''
+        else :
             return False,re
-        else:
-            return True,''
 
     def getCcmtsVersion(self,key):
         cmd = 'show ccmts version | include C{}\\b'.format(key)

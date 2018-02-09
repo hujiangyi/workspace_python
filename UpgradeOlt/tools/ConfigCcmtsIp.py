@@ -12,6 +12,7 @@ class ConfigCcmtsIp(UpgradeOlt):
             self.state,self.msg = self.doConfigCcmts(self.vlan,self.gateway,self.ftpServer,self.slot,self.port,self.device)
         except BaseException, msg:
             self.parent.log(`msg`)
+            self.state, self.msg = False,msg
             print 'traceback.format_exc():\n%s' % traceback.format_exc()
 
 
