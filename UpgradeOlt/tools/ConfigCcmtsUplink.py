@@ -2,40 +2,41 @@ import traceback
 
 from UpgradeOlt import *
 
-class ConfigCcmtsIp(UpgradeOlt):
+class ConfigCcmtsUplink(UpgradeOlt):
     def run(self):
         self.doTelnet()
         self.doConfig()
         self.close()
     def doConfig(self):
         try:
-            self.state,self.msg = self.doConfigCcmts(self.vlan,self.gateway,self.ftpServer,self.slot,self.port,self.device)
+            self.state,self.msg = self.doConfigCcmts(self.vlan,self.gateway,self.ftpServer,self.ftpUsername,self.ftpPassword,self.configFile,self.slot,self.port,self.device)
         except BaseException, msg:
             self.parent.log(`msg`)
             self.state, self.msg = False,msg
             print 'traceback.format_exc():\n%s' % traceback.format_exc()
 
 
-    def connect(self,parent,host,isAAA,userName,password,enablePassword,cmip,mask,cmgateway,vlan,gateway,ftpServer,slot,port,device,slotType,cmvlan):
+    def connect(self,parent,host,isAAA,userName,password,enablePassword,cmip,mask,cmgateway,vlan,gateway,ftpServer,ftpUsername,ftpPassword,configFile,slot,port,device):
         print 'connect to host ' + host
         self.parent = parent
         self.vlan = vlan
         self.gateway = gateway
         self.ftpServer = ftpServer
+        self.ftpUsername = ftpUsername
+        self.ftpPassword = ftpPassword
+        self.configFile = configFile
         self.slot = slot
         self.port = port
         self.device = device
-        self.slotType = slotType
-        self.cmvlan = cmvlan
         self.initCmIpArg(cmip,mask,cmgateway)
         self.setTelnetArg(host,isAAA,userName,password,enablePassword)
 
-    def getUpgradeResult(self):
+    def getConfigResult(self):
         return self.state,self.msg
 
 
 
-    def doConfigCcmts(self,vlan,gateway,ftpServer,slot,port,device):
+    def doConfigCcmts(self,vlan,gateway,ftpServer,ftpUsername,ftpPassword,configFile,slot,port,device):
         row = {"identifyKey": "ip",
                "ip": slot + '/' + port + '/' + device,
                "result": "start",
@@ -53,14 +54,7 @@ class ConfigCcmtsIp(UpgradeOlt):
         self.send('interface ccmts ' + slot + '/' + port + '/' + device)
         self.readuntil('(config-if-ccmts-' + slot + '/' + port + '/' + device + ')#')
         self.send('onu-ipconfig ip-address ' + gateway + '.' + slot + '.' + port + '.' + device +  ' mask 255.0.0.0 gateway ' + gateway + '.254.0.1 cvlan ' + vlan)
-        re = self.readuntil('(config-if-ccmts-' + slot + '/' + port + '/' + device + ')#')
-        if '%This command does not support GPON CCMTS, and the corresponding GPON' in re:
-            self.send('exit')
-            self.readuntil('(config)#')
-            self.send('interface gpon {}/{}'.format(slot,port))
-            self.readuntil('(config-if-gpon-{}/{})#'.format(slot,port))
-            self.send('onu-ipconfig {3} ip-index 1 static ip-address {0}.{1}.{2}.{3} mask 255.0.0.0 gateway {0}.254.0.1 vlan {4}'.format(gateway,slot,port,device,vlan))
-            self.readuntil('(config-if-gpon-{}/{})#'.format(slot,port))
+        self.readuntil('(config-if-ccmts-' + slot + '/' + port + '/' + device + ')#')
         self.send('telnet ' + gateway + '.' + slot + '.' + port + '.' + device)
         re = self.readuntilMutl(['Username:','username:','%Telnet exit successful','%Connect to ' + gateway + '.' + slot + '.' + port + '.' + device + ' timeout!'])
         if '%Telnet exit successful' in re:
@@ -83,7 +77,7 @@ class ConfigCcmtsIp(UpgradeOlt):
                 cmIp = cols[1]
                 self.cmgateway = None
                 self.parent.log('cmts ip is ' + cmIp, cmts=slot + '/' + port + '/' + device)
-                state,msg = self.configCmtsIp(cmIp, ftpServer,slot,port,device)
+                state,msg = self.configCmtsIp(cmIp, ftpServer,ftpUsername,ftpPassword,configFile,slot,port,device)
             else:
                 self.parent.log('cmts does not specify.', cmts=slot + '/' + port + '/' + device)
                 return False, 'cmts does not specify.'
@@ -100,12 +94,12 @@ class ConfigCcmtsIp(UpgradeOlt):
                 else:
                     break
             self.parent.log('cmts ip is ' + cmIp, cmts=slot + '/' + port + '/' + device)
-            state,msg = self.configCmtsIp(cmIp,ftpServer,slot,port,device)
+            state,msg = self.configCmtsIp(cmIp,ftpServer,ftpUsername,ftpPassword,configFile,slot,port,device)
             while not state:
                 cmIp = self.parent.nextIp()
                 if cmIp == self.cmgateway :
                     cmIp = self.parent.nextIp()
-                state, msg = self.configCmtsIp(cmIp, ftpServer,slot,port,device)
+                state, msg = self.configCmtsIp(cmIp, ftpServer,ftpUsername,ftpPassword,configFile,slot,port,device)
         self.send('exit')
         self.readuntil('>')
         self.send('exit')
@@ -114,7 +108,7 @@ class ConfigCcmtsIp(UpgradeOlt):
         return state,msg
 
 
-    def configCmtsIp(self,cmIp,ftpServer,slot,port,device):
+    def configCmtsIp(self,cmIp,ftpServer,ftpUsername,ftpPassword,configFile,slot,port,device):
         key = '{}/{}/{}'.format(slot,port,device)
         self.send('end')
         self.readuntil('#')
@@ -128,23 +122,10 @@ class ConfigCcmtsIp(UpgradeOlt):
         self.readuntil('(config-if-ccmts-1/1/1)#')
         self.send('exit')
         self.readuntil('(config)#')
-        self.send('no ip address primary')
-        self.readuntil('(config)#')
         self.send('no ip address dhcp-alloc')
         self.readuntil('(config)#')
-        if not self.isGpon(self.slotType) :
-            if self.cmvlan == 1:
-                self.cmvlan = 0
-        if self.cmvlan != 0:
-            self.send('interface vlanif {}'.format(self.cmvlan))
-            self.readuntil('#')
-            self.send('ip address ' + cmIp + ' ' + self.mask + ' primary')
-            self.readuntil('#')
-            self.send('exit')
-            self.readuntil('#')
-        else :
-            self.send('ip address ' + cmIp + ' ' + self.mask + ' primary')
-            self.readuntil('#')
+        self.send('ip address ' + cmIp + ' ' + self.mask + ' primary')
+        self.readuntil('(config)#')
         if self.cmgateway != None:
             self.send('gateway ' + self.cmgateway + '')
             self.readuntil('(config)#')
@@ -158,12 +139,6 @@ class ConfigCcmtsIp(UpgradeOlt):
         self.readuntil('#')
         self.send('echo $?')
         re = self.readuntil('#')
-        self.send('exit')
-        self.readuntil('#')
-        self.send('exit')
-        self.readuntil('#')
-        self.send('exit')
-        self.readuntil('#')
         lines = re.split('\r\n')
         for s in lines:
             if 'echo $?' in s:
@@ -172,7 +147,20 @@ class ConfigCcmtsIp(UpgradeOlt):
                 continue
             if '0' == s:
                 self.parent.log('{}config success!cmIp:{}'.format(key,cmIp), cmts=slot + '/' + port + '/' + device)
-                return True, ''
+                self.send('exit')
+                self.readuntil('#')
+                self.send('exit')
+                self.readuntil('#')
+                self.send('exit')
+                self.readuntil('#')
+                self.send('load  config ftp  {} {} {} {}'.format(ftpServer,ftpUsername,ftpPassword,configFile))
+                re = self.readuntil('#')
+                if 'Configuration saved to /app/config' in re:
+                    self.parent.log('load config success', cmts=slot + '/' + port + '/' + device)
+                    return True, ''
+                else :
+                    self.parent.log('load config faild', cmts=slot + '/' + port + '/' + device)
+                    return False, 're'
             else:
                 self.parent.log('{}ftp server can not connect.cmIp:{}'.format(key,cmIp), cmts=slot + '/' + port + '/' + device)
                 return False, '{}ftp server can not connect.cmIp:{}'.format(key,cmIp)
@@ -183,6 +171,6 @@ class ConfigCcmtsIp(UpgradeOlt):
 
     def log(self, str,cmts=None,headName='result'):
         self.parent.log(str,cmts,headName)
+
     def writeResult(self, msg,cmts=None):
         self.parent.writeResult(msg,cmts)
-
