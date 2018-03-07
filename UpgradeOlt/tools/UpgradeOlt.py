@@ -514,7 +514,7 @@ class UpgradeOlt(Thread):
                     else:
                         return True,'mpu',['epu','geu','gpu','xgu','bootrom','bootrom-e500']
                 else:
-                    if 'meu' in assignType:
+                    if 'meu' in assignType or 'mefa' in assignType or 'mefb' in assignType:
                         return False,'meu',['bootrom-e500']
                     elif 'mef' in assignType:
                         return False,'mef',['bootrom']
@@ -527,7 +527,7 @@ class UpgradeOlt(Thread):
         self.log('sync config file')
         self.send('sync config file')
         re = self.readuntilMutl(['Are you sure?(y/n) [n]','#'])
-        if '%' not in re:
+        if '% Unknown command.' not in re:
             self.send('y')
             self.readuntil('#')
             self.send(cmd)

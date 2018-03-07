@@ -137,7 +137,7 @@ ftpUserNameStr.set('config')
 ftpPasswordStr.set('config')
 configFileStr.set('gpon.cfg')
 threadNumStr.set('10')
-ccFilterStr.set('2/1/*,2/3/*,2/7/*')
+ccFilterStr.set('2/2/*,2/4/*,2/5/*,2/6/*')
 
 row = 0
 row = rowView(row,'OltExcel',oltExcelPath,fun=selectOltExcelPath)

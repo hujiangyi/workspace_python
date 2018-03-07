@@ -1,10 +1,10 @@
 import traceback
 import time
-from UpgradeOlt import UpgradeOlt
 from ConfigCcmtsUplink import ConfigCcmtsUplink
+from UpgradeCcmts import UpgradeCcmts
 
 
-class ModifyUpLink(UpgradeOlt):
+class ModifyUpLink(UpgradeCcmts):
     def run(self):
         row={"identifyKey":"ip",
              "ip":self.host,
@@ -55,7 +55,7 @@ class ModifyUpLink(UpgradeOlt):
         state,msg = self.confgVlan(vlan,gateway)
         for slot,portMap in self.allCmts.items():
             for port,deviceList in portMap.items():
-                state,msg = self.doConfigPon(vlan,slot,port)
+                state,msg = self.doConfigPon(vlan,0,slot,port,'epu')
                 for device in deviceList:
                     key = '{}/{}/{}'.format(slot,port,device)
                     if '*' not in filterMap:

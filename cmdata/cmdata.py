@@ -13,14 +13,14 @@ def getSnmpDataHexString(o,ip,community) :
         if 'No SNMP response received before timeout' in msg  or 'RequestTimedOut()' in msg:
             print ip + ' No SNMP response received'
             break
-        nOid = `a[3][0].__getitem__(0)`.replace(oid,'')
-        if oid not in nOid :
+        nOid = `a[3][0].__getitem__(0)`.replace(o,'')
+        if o not in nOid :
             break
         count+=1
         oc=a[3][0].__getitem__(1)
         value=''.join(['%.2x' % x for x in oc.asNumbers()])
         data[nOid] = value
-    print ip + ' ' + mac + ' ' + data
+    print ip + ' ' + community + ' ' + data
     return data
 
 def getSnmpDataNumber(o,ip,community) :
@@ -33,8 +33,8 @@ def getSnmpDataNumber(o,ip,community) :
         if 'No SNMP response received before timeout' in msg  or 'RequestTimedOut()' in msg:
             print ip + ' No SNMP response received'
             break
-        nOid = `a[3][0].__getitem__(0)`.replace(oid,'')
-        if oid not in nOid :
+        nOid = `a[3][0].__getitem__(0)`.replace(o,'')
+        if o not in nOid :
             break
         count+=1
         value=int(a[3][0].__getitem__(1))
@@ -63,7 +63,7 @@ def getSnmpDataNumberSimple(o,ip,community,timeout=1,retry=0) :
     if 'No SNMP response received before timeout' in msg  or 'RequestTimedOut()' in msg:
         print ip + ' No SNMP response received.' + o
         return 'error'
-    if not isinstance(a[3][0].__getitem__(1),pysnmp.proto.rfc1902.Integer) :
+    if not isinstance(numberA[3][0].__getitem__(1),pysnmp.proto.rfc1902.Integer) :
         print 'data is error'
         return 'error'
     else :
@@ -100,7 +100,7 @@ def run() :
         wi+=1
         for i in range(nrows) :
             ip=sheetR.cell(i,3).value
-            if ip!='' and ip != '0.0.0.0' and 'IP' not in ip:
+            if ip!='' and ip != '0.0.0.0' and 'cmIp' not in ip:
                 mac=sheetR.cell(i,2).value
                 managerIp=sheetR.cell(i,0).value
                 managerCommunity=sheetR.cell(i,1).value
@@ -139,3 +139,5 @@ def run() :
                 wi+=1
         wb.save(resultExcel)
     wb.save(resultExcel)
+
+run()

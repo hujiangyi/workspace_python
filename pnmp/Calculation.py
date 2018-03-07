@@ -4,7 +4,7 @@ from pnmp.utils import PnmpUtils as utils, PreEqualizationParam
 import pickle
 
 macList = ['10:C6:1F:CD:C3:7A', '5C:C6:D0:62:D9:72', '80:B6:86:CC:1A:FC']
-excel = 'CM.xls'
+excel = 'CMresult.xls'
 rb = xlrd.open_workbook(excel)
 wb = copy(rb)
 sheetCount = len(rb.sheets())

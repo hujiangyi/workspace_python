@@ -15,7 +15,7 @@ macList = ['10:C6:1F:CD:C3:7A', '5C:C6:D0:62:D9:72', '80:B6:86:CC:1A:FC']
 
 excel = 'Classification.xls'
 rb = xlrd.open_workbook(excel)
-sheetR = rb.sheet_by_name('10.223.35.194_277020672_1')
+sheetR = rb.sheet_by_name('1.1.39.2_830537728_2')
 nrows = sheetR.nrows
 ncols = sheetR.ncols
 colorArray = Color.colorArray(nrows)

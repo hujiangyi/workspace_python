@@ -34,7 +34,7 @@ def insertRow(wb,sheetName,col):
     for i,v in enumerate(col):
         sheetW.write(row, i, v)
 
-excel = 'CM.xls'
+excel = 'CMresult.xls'
 resultExcel = 'Classification_mtc.xls'
 rb = xlrd.open_workbook(excel)
 wb = xlwt.Workbook()

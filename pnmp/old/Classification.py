@@ -1,8 +1,5 @@
 import xlrd
 import xlwt
-from xlutils.copy import copy
-import PreEqualizationParam
-import PnmpUtils as utils
 
 sheetWMap = {}
 def createSheet(wb,sheetName):
@@ -39,7 +36,7 @@ def createSheetName(ip,cmcIndex,channelId):
         print cmcIndex
         print channelId
 
-excel = 'CM.xls'
+excel = 'CMresult.xls'
 resultExcel = 'Classification.xls'
 rb = xlrd.open_workbook(excel)
 wb = xlwt.Workbook()
