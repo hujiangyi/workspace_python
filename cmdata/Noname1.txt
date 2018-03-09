@@ -60,8 +60,10 @@ numberG = nextCmd(SnmpEngine(),CommunityData('public'),UdpTransportTarget((ip,16
 numberA = next(numberG)
 msg = `numberA[0]`
 
-
-select e.ip as managerIp,sp.community as community,ca.statusMacAddress as cmMac,ca.statusInetAddress as cmIp,ca.statusIndex from cmccmrelation ccr 
+select e.ip as managerIp,sp.community as community,ca.statusMacAddress as cmMac,ca.statusInetAddress as cmIp,cer.cmcIndex,ca.statusIndex,e.name as name from cmccmrelation ccr 
 left join cmattribute ca on ca.cmId = ccr.cmId
 left join entity e on e.entityId = ccr.entityId
 left join snmpparam sp on sp.entityId = ccr.entityId
+left join cmcentityrelation cer on cer.cmcId = ccr.cmcId
+where e.entityId in (select entityId from entity where ip in ('10.223.35.158','10.223.35.202','10.223.35.150','10.223.36.74','10.223.35.50','10.223.35.78','10.223.35.114','10.223.35.54','10.223.36.78','10.223.35.74'))
+

@@ -36,7 +36,7 @@ def createSheetName(ip,cmcIndex,channelId):
         print cmcIndex
         print channelId
 
-excel = 'CMresult.xls'
+excel = 'Calculation.xls'
 resultExcel = 'Classification.xls'
 rb = xlrd.open_workbook(excel)
 wb = xlwt.Workbook()

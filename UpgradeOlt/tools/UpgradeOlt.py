@@ -217,7 +217,7 @@ class UpgradeOlt(Thread):
     def getMainBoardTypes(self):
         return ['mpu', 'mpub', 'meu', 'mef', 'mgu']
 
-    def checkCmd(self,cmds,errorMessage='% Unknown command.'):
+    def checkCmd(self,cmds,errorMessage='%'):
         for cmd in cmds:
             self.send(cmd)
             re = self.readuntil('#')
@@ -527,7 +527,7 @@ class UpgradeOlt(Thread):
         self.log('sync config file')
         self.send('sync config file')
         re = self.readuntilMutl(['Are you sure?(y/n) [n]','#'])
-        if '% Unknown command.' not in re:
+        if '%' not in re :
             self.send('y')
             self.readuntil('#')
             self.send(cmd)
