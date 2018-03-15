@@ -4,9 +4,15 @@ from UpgradeOlt import *
 
 class ConfigCcmtsIp(UpgradeOlt):
     def run(self):
+        self.initLog(self.logPath,self.host)
         self.doTelnet()
         self.doConfig()
         self.close()
+    def initLog(self,logPath,host):
+        key = '{}_{}_{}'.format(self.slot,self.port,self.device)
+        self.logPath = logPath
+        self.cmdResultFile = open("{}{}_{}CmdResult.log".format(logPath,host,key), "w")
+        self.logResultFile = open("{}{}_{}logFile.log".format(logPath,host,key), "w")
     def doConfig(self):
         try:
             self.state,self.msg = self.doConfigCcmts(self.vlan,self.gateway,self.ftpServer,self.slot,self.port,self.device)
@@ -16,7 +22,9 @@ class ConfigCcmtsIp(UpgradeOlt):
             print 'traceback.format_exc():\n%s' % traceback.format_exc()
 
 
-    def connect(self,parent,host,isAAA,userName,password,enablePassword,cmip,mask,cmgateway,vlan,gateway,ftpServer,slot,port,device,slotType,cmvlan):
+
+
+    def connect(self,parent,host,isAAA,userName,password,enablePassword,cmip,mask,cmgateway,vlan,gateway,ftpServer,slot,port,device,slotType,cmvlan,logPath):
         print 'connect to host ' + host
         self.parent = parent
         self.vlan = vlan
@@ -29,6 +37,7 @@ class ConfigCcmtsIp(UpgradeOlt):
         self.cmvlan = cmvlan
         self.initCmIpArg(cmip,mask,cmgateway)
         self.setTelnetArg(host,isAAA,userName,password,enablePassword)
+        self.logPath = logPath
 
     def getUpgradeResult(self):
         return self.state,self.msg
@@ -62,11 +71,11 @@ class ConfigCcmtsIp(UpgradeOlt):
             self.send('onu-ipconfig {3} ip-index 1 static ip-address {0}.{1}.{2}.{3} mask 255.0.0.0 gateway {0}.254.0.1 vlan {4}'.format(gateway,slot,port,device,vlan))
             self.readuntil('(config-if-gpon-{}/{})#'.format(slot,port))
         self.send('telnet ' + gateway + '.' + slot + '.' + port + '.' + device)
-        re = self.readuntilMutl(['Username:','username:','%Telnet exit successful','%Connect to ' + gateway + '.' + slot + '.' + port + '.' + device + ' timeout!'])
+        re = self.readuntilMutl(['Username:','username:','%Telnet exit successful','%Error:Connect to {}.{}.{}.{} timeout!'.format(gateway,slot,port,device),'%Connect to ' + gateway + '.' + slot + '.' + port + '.' + device + ' timeout!'])
         if '%Telnet exit successful' in re:
             self.parent.log('%Telnet exit successful',cmts=slot + '/' + port + '/' + device)
             return False,'%Telnet exit successful'
-        elif '%Connect to ' + gateway + '.' + slot + '.' + port + '.' + device + ' timeout!' in re:
+        elif '%Connect to ' + gateway + '.' + slot + '.' + port + '.' + device + ' timeout!' in re or '%Error:Connect to {}.{}.{}.{} timeout!'.format(gateway,slot,port,device) in re:
             self.parent.log('%Connect to ' + gateway + '.' + slot + '.' + port + '.' + device + ' timeout!',cmts=slot + '/' + port + '/' + device)
             return False,'%Connect to ' + gateway + '.' + slot + '.' + port + '.' + device + ' timeout!'
         self.send('admin')
@@ -177,12 +186,22 @@ class ConfigCcmtsIp(UpgradeOlt):
                 self.parent.log('{}ftp server can not connect.cmIp:{}'.format(key,cmIp), cmts=slot + '/' + port + '/' + device)
                 return False, '{}ftp server can not connect.cmIp:{}'.format(key,cmIp)
 
-
     def cmdLog(self, str):
         self.parent.cmdLog(str)
+        try:
+            self.cmdResultFile.write(str)
+            self.cmdResultFile.flush()
+        except BaseException, msg:
+            print msg
 
     def log(self, str,cmts=None,headName='result'):
         self.parent.log(str,cmts,headName)
+        try:
+            str = datetime.datetime.now().strftime('%Y%m%d%H%M%S\t') + str + '\n'
+            self.logResultFile.write(str)
+            self.logResultFile.flush()
+        except BaseException, msg:
+            print msg
     def writeResult(self, msg,cmts=None):
         self.parent.writeResult(msg,cmts)
 

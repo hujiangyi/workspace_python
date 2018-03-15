@@ -97,7 +97,7 @@ class UpgradeCcmts(UpgradeOlt):
                                         configCcmtsIp = ConfigCcmtsIp()
                                         configCcmtsIp.connect(self,self.host, self.isAAA, self.userName, self.password, self.enablePassword, self.cmip, self.mask,
                                                              self.cmgateway, vlan, gateway,
-                                                             ftpServer,slot,port,device,slotType['{}'.format(slot)],self.cmvlan)
+                                                             ftpServer,slot,port,device,slotType['{}'.format(slot)],self.cmvlan,self.logPath)
                                         configCcmtsIp.setDaemon(True)
                                         configCcmtsIp.start()
                                         upgradeThreads.append(configCcmtsIp)
@@ -267,7 +267,7 @@ class UpgradeCcmts(UpgradeOlt):
         self.readuntil('#')
         self.send('configure terminal')
         self.readuntil('(config)#')
-        self.send('show mdu image-upgrade-status interface {} | include Progress   :'.format(key))
+        self.send('show mdu image-upgrade-status interface {}'.format(key))
         re = self.readuntil('(config)#')
         lines = re.split('\r\n')
         for line in lines:
@@ -279,13 +279,16 @@ class UpgradeCcmts(UpgradeOlt):
                 continue
             if '#' in line:
                 continue
-            if '%' not in line:
-                return False,True,line
-            else :
-                if '100%' in line:
-                    return True,True,line
+            if 'Download image failed.'in line:
+                return  False,True,line
+            if 'Progress   :'in line:
+                if '%' not in line:
+                    return False,True,line
                 else :
-                    return False,False,line
+                    if '100%' in line:
+                        return True,True,line
+                    else :
+                        return False,False,line
         return False,False,''
     def checkAllUpgradeStatus(self):
         self.log('checkAllUpgradeStatus')
@@ -296,19 +299,21 @@ class UpgradeCcmts(UpgradeOlt):
                 for port,deviceList in portMap.items():
                     for device in deviceList:
                         key =  '{}/{}/{}'.format(slot,port,device)
-                        if not allKey.__contains__(key) :
-                            allKey.append(key)
-                        if not upgradeStatus.has_key(key) :
-                            state,finish,result = self.checkCmtsUpgradeStatus(slot,port,device)
-                            if state:
-                                upgradeStatus[key] = state
-                                self.log('{} upgrade state :{}'.format(key,state),cmts=slot + '/' + port + '/' + device)
-                            else :
-                                if finish:
+                        nversion = self.allVersion[key]
+                        if nversion != None and nversion != 'no version' and nversion != '' and nversion != self.version:
+                            if not allKey.__contains__(key) :
+                                allKey.append(key)
+                            if not upgradeStatus.has_key(key) :
+                                state,finish,result = self.checkCmtsUpgradeStatus(slot,port,device)
+                                if state:
                                     upgradeStatus[key] = state
-                                    self.log('{} upgrade state :{}'.format(key,state),cmts=slot + '/' + port + '/' + device)
+                                    self.log('{} upgrade state :{}:{}'.format(key,state,result),cmts=slot + '/' + port + '/' + device)
                                 else :
-                                    self.log('{} upgrade not finish{}'.format(key,result),cmts=slot + '/' + port + '/' + device)
+                                    if finish:
+                                        upgradeStatus[key] = state
+                                        self.log('{} upgrade state :{}:{}'.format(key,state,result),cmts=slot + '/' + port + '/' + device)
+                                    else :
+                                        self.log('{} upgrade not finish{}'.format(key,result),cmts=slot + '/' + port + '/' + device)
             self.log('allKey:{};upgradeStatus{}'.format(len(allKey),len(upgradeStatus)))
             if len(allKey) == len(upgradeStatus):
                 return
@@ -375,11 +380,13 @@ class UpgradeCcmts(UpgradeOlt):
             for port, deviceList in portMap.items():
                 for device in deviceList:
                     key = '{}/{}/{}'.format(slot,port,device)
-                    self.log('reset cmts {}'.format(key),cmts=slot + '/' + port + '/' + device)
-                    self.send('interface ccmts ' + key,)
-                    self.readuntil('(config-if-ccmts-{})#'.format(key))
-                    self.send('reset')
-                    self.readuntil('(config-if-ccmts-{})#'.format(key))
+                    nversion = self.allVersion[key]
+                    if nversion != None and nversion != 'no version' and nversion != '' and nversion != self.version:
+                        self.log('reset cmts {}'.format(key),cmts=slot + '/' + port + '/' + device)
+                        self.send('interface ccmts ' + key,)
+                        self.readuntil('(config-if-ccmts-{})#'.format(key))
+                        self.send('reset')
+                        self.readuntil('(config-if-ccmts-{})#'.format(key))
     def clearConfig(self,vlan):
         self.log('clearConfig',headName='clearResult')
         for slot,portMap in self.allCmts.items():
