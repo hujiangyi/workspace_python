@@ -1,8 +1,5 @@
-/pnmp/old/Classification_snr.xls
-/pnmp/old/Classification.xls
-/pnmp/old/Classification_log.xls
-/pnmp/old/Classification_mtc.xls
-/pnmp/CM.xls
+**/*.xls
+**/*.xlsx
 /UpgradeOlt/log/**/*
 /UpgradeOlt/image/**/*
 /UpgradeOlt/build/**/*
@@ -11,3 +8,6 @@
 /AutoTest
 **/*.pyc
 **/*.spec
+**/build/**/*
+**/dist/**/*
+venv/**/*
