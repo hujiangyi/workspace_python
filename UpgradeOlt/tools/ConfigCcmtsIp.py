@@ -1,4 +1,5 @@
 import traceback
+import time
 
 from UpgradeOlt import *
 
@@ -17,12 +18,9 @@ class ConfigCcmtsIp(UpgradeOlt):
         try:
             self.state,self.msg = self.doConfigCcmts(self.vlan,self.gateway,self.ftpServer,self.slot,self.port,self.device)
         except BaseException, msg:
-            self.parent.log(`msg`)
             self.state, self.msg = False,msg
+            self.parent.log('traceback.format_exc():\n%s' % traceback.format_exc())
             print 'traceback.format_exc():\n%s' % traceback.format_exc()
-
-
-
 
     def connect(self,parent,host,isAAA,userName,password,enablePassword,cmip,mask,cmgateway,vlan,gateway,ftpServer,slot,port,device,slotType,cmvlan,logPath):
         print 'connect to host ' + host
@@ -70,6 +68,7 @@ class ConfigCcmtsIp(UpgradeOlt):
             self.readuntil('(config-if-gpon-{}/{})#'.format(slot,port))
             self.send('onu-ipconfig {3} ip-index 1 static ip-address {0}.{1}.{2}.{3} mask 255.0.0.0 gateway {0}.254.0.1 vlan {4}'.format(gateway,slot,port,device,vlan))
             self.readuntil('(config-if-gpon-{}/{})#'.format(slot,port))
+        time.sleep(5)
         self.send('telnet ' + gateway + '.' + slot + '.' + port + '.' + device)
         re = self.readuntilMutl(['Username:','username:','%Telnet exit successful','%Error:Connect to {}.{}.{}.{} timeout!'.format(gateway,slot,port,device),'%Connect to ' + gateway + '.' + slot + '.' + port + '.' + device + ' timeout!'])
         if '%Telnet exit successful' in re:
