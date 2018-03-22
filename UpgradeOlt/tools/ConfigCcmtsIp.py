@@ -22,7 +22,7 @@ class ConfigCcmtsIp(UpgradeOlt):
             self.parent.log('traceback.format_exc():\n%s' % traceback.format_exc())
             print 'traceback.format_exc():\n%s' % traceback.format_exc()
 
-    def connect(self,parent,host,isAAA,userName,password,enablePassword,cmip,mask,cmgateway,vlan,gateway,ftpServer,slot,port,device,slotType,cmvlan,logPath):
+    def connect(self,parent,host,isAAA,userName,password,enablePassword,cmip,mask,cmgateway,vlan,gateway,ftpServer,slot,port,device,slotType,cmvlan,logPath,mac):
         print 'connect to host ' + host
         self.parent = parent
         self.vlan = vlan
@@ -33,6 +33,7 @@ class ConfigCcmtsIp(UpgradeOlt):
         self.device = device
         self.slotType = slotType
         self.cmvlan = cmvlan
+        self.mac = mac
         self.initCmIpArg(cmip,mask,cmgateway)
         self.setTelnetArg(host,isAAA,userName,password,enablePassword)
         self.logPath = logPath

@@ -11,7 +11,7 @@ class BaseClassification:
         colName = []
         rb = xlrd.open_workbook(self.srcFile)
         wb = xlwt.Workbook()
-        sheetR = self.rb.sheet_by_index(self.sheetIndex)
+        sheetR = rb.sheet_by_index(self.sheetIndex)
         nrows = sheetR.nrows
         ncols = sheetR.ncols
         for i in range(0,ncols) :
@@ -20,7 +20,8 @@ class BaseClassification:
             colValue = []
             for j in range(0, ncols):
                 colValue.append(sheetR.cell(i, j).value)
-            self.doClassification(self,wb,i,colName,colValue)
+            self.doClassification(wb,i,colName,colValue)
+        self.doAfterSave(wb)
         wb.save(self.disFile)
     def insertRow(self,wb,sheetName,colName,colValue):
         sheetW = self.createSheet(wb, sheetName,colName)
@@ -39,3 +40,5 @@ class BaseClassification:
         return sheetW
     def doClassification(self,wb,rowCount,colName,colValue):
         self.insertRow(wb,'sheetName',colName,colValue)
+    def doAfterSave(self,wb):
+        pass

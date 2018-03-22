@@ -2,6 +2,7 @@ import traceback
 import time
 from UpgradeOlt import UpgradeOlt
 from ConfigCcmtsIp import ConfigCcmtsIp
+from ResetCcmts import ResetCcmts
 
 
 class UpgradeCcmts(UpgradeOlt):
@@ -79,6 +80,7 @@ class UpgradeCcmts(UpgradeOlt):
                         for device in deviceList:
                             key = '{}/{}/{}'.format(slot,port,device)
                             nversion = self.allVersion[key]
+                            mac = self.allMac[key]
                             if nversion != None and nversion != 'no version' and nversion != '' and nversion != self.version:
                                 upgradeCmts.append(key)
                                 while True:
@@ -97,10 +99,11 @@ class UpgradeCcmts(UpgradeOlt):
                                         configCcmtsIp = ConfigCcmtsIp()
                                         configCcmtsIp.connect(self,self.host, self.isAAA, self.userName, self.password, self.enablePassword, self.cmip, self.mask,
                                                              self.cmgateway, vlan, gateway,
-                                                             ftpServer,slot,port,device,slotType['{}'.format(slot)],self.cmvlan,self.logPath)
+                                                             ftpServer,slot,port,device,slotType['{}'.format(slot)],self.cmvlan,self.logPath,mac)
                                         configCcmtsIp.setDaemon(True)
                                         configCcmtsIp.start()
                                         upgradeThreads.append(configCcmtsIp)
+                                        time.sleep(1)
                                         break
                                     else :
                                         time.sleep(10)
@@ -216,6 +219,7 @@ class UpgradeCcmts(UpgradeOlt):
     def getAllOnlineCmts(self,raiseException=False):
         allCmts = {}
         allVersion = {}
+        allMac = {}
         allKey = []
         self.log('getAllOnlineCmts')
         self.send('end')
@@ -237,12 +241,14 @@ class UpgradeCcmts(UpgradeOlt):
             slot = nums[0][1:len(nums[0])]
             port = nums[1]
             device = nums[2]
+            mac = cols[1]
             key = '{}/{}/{}'.format(slot,port,device)
             if not allKey.__contains__(key) :
                 allKey.append(key)
             version = self.getCcmtsVersion(key)
             self.log('{}:{}'.format(key,version))
             allVersion[key] = version
+            allMac[key] = mac
             #print slot,port,device
             portMap = {}
             if allCmts.has_key(slot):
@@ -259,7 +265,7 @@ class UpgradeCcmts(UpgradeOlt):
             self.log('No CMTS is on the OLT.')
             if raiseException :
                 raise Exception('No CMTS is on the OLT.')
-        return allCmts,allKey,allVersion
+        return allCmts,allKey,allVersion,allMac
 
     def checkCmtsUpgradeStatus(self,slot,port,device):
         key = '{}/{}/{}'.format(slot,port,device)
@@ -376,17 +382,58 @@ class UpgradeCcmts(UpgradeOlt):
         self.readuntil('(config)#')
         self.send('configure terminal')
         self.readuntil('(config)#')
+        resetCmts = []
+        resetThreads = []
         for slot, portMap in self.allCmts.items():
             for port, deviceList in portMap.items():
                 for device in deviceList:
                     key = '{}/{}/{}'.format(slot,port,device)
                     nversion = self.allVersion[key]
+                    mac = self.allMac[key]
                     if nversion != None and nversion != 'no version' and nversion != '' and nversion != self.version:
-                        self.log('reset cmts {}'.format(key),cmts=slot + '/' + port + '/' + device)
-                        self.send('interface ccmts ' + key,)
-                        self.readuntil('(config-if-ccmts-{})#'.format(key))
-                        self.send('reset')
-                        self.readuntil('(config-if-ccmts-{})#'.format(key))
+                        resetCmts.append(key)
+                        while True:
+                            for t in resetThreads:
+                                if not t.isAlive():
+                                    state, msg = t.getResetResult()
+                                    if not state:
+                                        self.log(msg)
+                                        # self.writeResult(msg)
+                                        self.faildCount = self.faildCount + 1
+                                    else:
+                                        self.successCount = self.successCount + 1
+                                    resetThreads.remove(t)
+                                    break
+                            if len(resetThreads) < self.threadNum / 2:
+                                resetCcmts = ResetCcmts()
+                                resetCcmts.connect(self, self.host, self.isAAA, self.userName, self.password,
+                                                      self.enablePassword, self.gateway, slot, port, device,  self.logPath, mac)
+                                resetCcmts.setDaemon(True)
+                                resetCcmts.start()
+                                resetThreads.append(resetCcmts)
+                                time.sleep(1)
+                                break
+                            else:
+                                time.sleep(10)
+
+        while True:
+            if len(resetThreads) == 0:
+                break
+            removeThread = []
+            for t in resetThreads:
+                if not t.isAlive():
+                    state, msg = t.getResetResult()
+                    if not state:
+                        self.log(msg)
+                        # self.writeResult(msg)
+                        self.faildCount = self.faildCount + 1
+                    else:
+                        self.successCount = self.successCount + 1
+                    removeThread.append(t)
+                    break
+            for t in removeThread:
+                resetThreads.remove(t)
+
     def clearConfig(self,vlan):
         self.log('clearConfig',headName='clearResult')
         for slot,portMap in self.allCmts.items():
@@ -403,11 +450,11 @@ class UpgradeCcmts(UpgradeOlt):
             self.writeResult(msg)
     def doResetCmts(self):
         self.log('doResetCmts',headName='clearResult')
-        bArray,bKeys,allVersion = self.getAllOnlineCmts()
+        bArray,bKeys,allVersion,allMac = self.getAllOnlineCmts()
         self.log('online cmts count(' + `len(bKeys)` + ')')
         self.resetCmts()
         while True:
-            nbArray,nbKeys,allVersion = self.getAllOnlineCmts()
+            nbArray,nbKeys,allVersion,allMac = self.getAllOnlineCmts()
             self.log('online cmts count before reset(' + `len(bKeys)` + ') after reset(' + `len(nbKeys)` + ')')
             if len(bKeys) == len(nbKeys) :
                 for key,version in allVersion.items():

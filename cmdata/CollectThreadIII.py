@@ -4,10 +4,11 @@ import pysnmp
 from pysnmp.hlapi import *
 
 class CollectThreadIII (Thread) :
-    def __init__(self,cmDataIII,cmList):
+    def __init__(self,cmDataIII,cmList,oltIp):
         Thread.__init__(self)
         self.cmDataIII = cmDataIII
         self.cmList = cmList
+        self.oltIp = oltIp
     def run(self):
         for cm in self.cmList:
             #print '{} start'.format(self.ip)
@@ -20,21 +21,21 @@ class CollectThreadIII (Thread) :
             upSignalNoise = ''
             try:
                 equalizationDataOid = '1.3.6.1.2.1.10.127.1.2.2.1.17'
-                equalizationData = self.getSnmpDataHexStringSimple(equalizationDataOid, cm.ip, 'public')
+                equalizationData = self.getSnmpDataHexStringSimple(equalizationDataOid, cm['ip'], 'public')
                 if 'error' == equalizationData:
                     raise Exception('collect error')
                 upChannelIdOid = '1.3.6.1.2.1.10.127.1.1.2.1.1'
-                upChannelId = self.getSnmpDataNumberSimple(upChannelIdOid, cm.ip, 'public')
+                upChannelId = self.getSnmpDataNumberSimple(upChannelIdOid, cm['ip'], 'public')
                 upChannelFreqOid = '1.3.6.1.2.1.10.127.1.1.2.1.2'
-                upChannelFreq = self.getSnmpDataNumberSimple(upChannelFreqOid, cm.ip, 'public')
+                upChannelFreq = self.getSnmpDataNumberSimple(upChannelFreqOid, cm['ip'], 'public')
                 upChannelWidthOid = '1.3.6.1.2.1.10.127.1.1.2.1.3'
-                upChannelWidth = self.getSnmpDataNumberSimple(upChannelWidthOid, cm.ip, 'public')
+                upChannelWidth = self.getSnmpDataNumberSimple(upChannelWidthOid, cm['ip'], 'public')
                 upTxPowerOid = '1.3.6.1.2.1.10.127.1.2.2.1.3'
-                upTxPower = self.getSnmpDataNumberSimple(upTxPowerOid, cm.ip, 'public')
-                upRxPowerOid = '1.3.6.1.2.1.10.127.1.3.3.1.6.{}'.format(cm.cmIndex)
-                upRxPower = self.getSnmpDataNumberSimple(upRxPowerOid, cm.managerIp, cm.managerCommunity, 5, 1)
-                upSignalNoiseOid = '1.3.6.1.2.1.10.127.1.3.3.1.13.{}'.format(cm.cmIndex)
-                upSignalNoise = self.getSnmpDataNumberSimple(upSignalNoiseOid, cm.managerIp, cm.managerCommunity, 5, 1)
+                upTxPower = self.getSnmpDataNumberSimple(upTxPowerOid, cm['ip'], 'public')
+                upRxPowerOid = '1.3.6.1.2.1.10.127.1.3.3.1.6.{}'.format(cm['cmIndex'])
+                upRxPower = self.getSnmpDataNumberSimple(upRxPowerOid, cm['managerIp'], cm['managerCommunity'], 5, 1)
+                upSignalNoiseOid = '1.3.6.1.2.1.10.127.1.3.3.1.13.{}'.format(cm['cmIndex'])
+                upSignalNoise = self.getSnmpDataNumberSimple(upSignalNoiseOid, cm['managerIp'], cm['managerCommunity'], 5, 1)
             except BaseException, msg:
                 str = msg
             finally:

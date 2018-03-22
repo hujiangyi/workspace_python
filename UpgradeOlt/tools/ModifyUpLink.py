@@ -47,7 +47,7 @@ class ModifyUpLink(UpgradeCcmts):
 
     def configUplink(self,vlan,gateway,ftpServer,ftpUsername,ftpPassword,configFile):
         self.log('configUplink')
-        self.allCmts,self.allkey,self.allVersion = self.getAllOnlineCmts(raiseException=True)
+        self.allCmts,self.allkey,self.allVersion,self.allMac = self.getAllOnlineCmts(raiseException=True)
         self.successCount = 0
         self.faildCount = 0
         configThreads = []

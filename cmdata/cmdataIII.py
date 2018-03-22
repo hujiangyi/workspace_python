@@ -75,7 +75,7 @@ class CmDataIII:
 
         threads = []
         for managerIp,cmList in oltCmList.items():
-            collectThreadIII = CollectThreadIII(self,cmList)
+            collectThreadIII = CollectThreadIII(self,cmList,managerIp)
             collectThreadIII.setDaemon(True)
             collectThreadIII.start()
             threads.append(collectThreadIII)
@@ -87,7 +87,8 @@ class CmDataIII:
                 if not t.isAlive():
                     removeThread.append(t)
             for t in removeThread:
-                print 'end thread:{}'.format(t.ip)
+                print 'end thread:{}'.format(t.oltIp)
+                threads.remove(t)
         self.wb.save(resultExcel)
 
 CmDataIII().doCollect()
