@@ -70,11 +70,21 @@ class ConfigCcmtsIp(UpgradeOlt):
             self.send('onu-ipconfig {3} ip-index 1 static ip-address {0}.{1}.{2}.{3} mask 255.0.0.0 gateway {0}.254.0.1 vlan {4}'.format(gateway,slot,port,device,vlan))
             self.readuntil('(config-if-gpon-{}/{})#'.format(slot,port))
         time.sleep(5)
+        ip = '{}.{}.{}.{}'.format(gateway,slot,port,device)
+        re = self.ping(ip)
+        while not re :
+            self.parent.log('ping {} error'.format(ip))
+            re = self.ping(ip)
+        self.parent.log('ping {} success'.format(ip))
+        self.parent.log('do telnet {}'.format(ip))
+        self.send('telnet {}'.format(ip))
         self.send('telnet ' + gateway + '.' + slot + '.' + port + '.' + device)
         re = self.readuntilMutl(['Username:','username:','%Telnet exit successful','%Error:Connect to {}.{}.{}.{} timeout!'.format(gateway,slot,port,device),'%Connect to ' + gateway + '.' + slot + '.' + port + '.' + device + ' timeout!'])
         if '%Telnet exit successful' in re:
             self.parent.log('%Telnet exit successful',cmts=slot + '/' + port + '/' + device)
-            return False,'%Telnet exit successful'
+            while True:
+                time.sleep(10)
+            # return False,'%Telnet exit successful'
         elif '%Connect to ' + gateway + '.' + slot + '.' + port + '.' + device + ' timeout!' in re or '%Error:Connect to {}.{}.{}.{} timeout!'.format(gateway,slot,port,device) in re:
             self.parent.log('%Connect to ' + gateway + '.' + slot + '.' + port + '.' + device + ' timeout!',cmts=slot + '/' + port + '/' + device)
             return False,'%Connect to ' + gateway + '.' + slot + '.' + port + '.' + device + ' timeout!'

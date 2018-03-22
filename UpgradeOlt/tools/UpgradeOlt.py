@@ -725,3 +725,10 @@ class UpgradeOlt(Thread):
     def isGpon(self,slotType):
         return 'gpu' in slotType
 
+    def ping(self, ip):
+        self.send('ping {} -c 1'.format(ip))
+        re = self.readuntil('#')
+        if ' 0% packet loss' in re:
+            return True
+        else:
+            return False

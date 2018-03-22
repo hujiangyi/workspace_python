@@ -45,11 +45,20 @@ class ResetCcmts(UpgradeOlt):
         self.parent.log('configCcmts ' + slot + '/' + port + '/' + device,cmts=slot + '/' + port + '/' + device)
         self.send('end')
         self.readuntil('#')
-        self.send('telnet ' + gateway + '.' + slot + '.' + port + '.' + device)
+        ip = '{}.{}.{}.{}'.format(gateway,slot,port,device)
+        re = self.ping(ip)
+        while not re :
+            self.parent.log('ping {} error'.format(ip))
+            re = self.ping(ip)
+        self.parent.log('ping {} success'.format(ip))
+        self.parent.log('do telnet {}'.format(ip))
+        self.send('telnet {}'.format(ip))
         re = self.readuntilMutl(['Username:','username:','%Telnet exit successful','%Error:Connect to {}.{}.{}.{} timeout!'.format(gateway,slot,port,device),'%Connect to ' + gateway + '.' + slot + '.' + port + '.' + device + ' timeout!'])
         if '%Telnet exit successful' in re:
             self.parent.log('%Telnet exit successful',cmts=slot + '/' + port + '/' + device)
-            return False,'%Telnet exit successful'
+            while True:
+                time.sleep(10)
+            # return False,'%Telnet exit successful'
         elif '%Connect to ' + gateway + '.' + slot + '.' + port + '.' + device + ' timeout!' in re or '%Error:Connect to {}.{}.{}.{} timeout!'.format(gateway,slot,port,device) in re:
             self.parent.log('%Connect to ' + gateway + '.' + slot + '.' + port + '.' + device + ' timeout!',cmts=slot + '/' + port + '/' + device)
             return False,'%Connect to ' + gateway + '.' + slot + '.' + port + '.' + device + ' timeout!'
@@ -58,7 +67,6 @@ class ResetCcmts(UpgradeOlt):
         self.send('enable')
         self.readuntilII('#')
         return self.resetCcmts(slot,port,device)
-
 
     def resetCcmts(self,slot,port,device):
         key = '{}/{}/{}'.format(slot,port,device)

@@ -11,7 +11,8 @@ import xlrd
 from Tkinter import *
 from tkFileDialog import *
 from tkMessageBox import *
-from UpgradeOlt.tools.UpgradeCcmts import *
+
+from UpgradeOlt.tools.PingTest import PingTest
 from xlutils.copy import copy
 from utils.ListView import *
 
@@ -32,27 +33,6 @@ def rowView(row,label,textvariable,fun=None,lastLabel='no Label'):
 
 
 def closeDialog():
-    if oltExcelPath == None or oltExcelPath.get() == '':
-        showerror('error','The configuration file must be selected')
-        return
-    if cvlanStr == None or cvlanStr.get() == '':
-        showerror('error','cvlan can not be null')
-        return
-    if gatewayStr == None or gatewayStr.get() == '':
-        showerror('error','gateway can not be null')
-        return
-    if ftpServerStr == None or ftpServerStr.get() == '':
-        showerror('error','ftpServer can not be null')
-        return
-    if ftpUserNameStr == None or ftpUserNameStr.get() == '':
-        showerror('error','ftpUserName can not be null')
-        return
-    if ftpPasswordStr == None or ftpPasswordStr.get() == '':
-        showerror('error','ftpPassword can not be null')
-        return
-    if imageFileNameStr == None or imageFileNameStr.get() == '':
-        showerror('error','imageFileName can not be null')
-        return
     root.destroy()
     doUpgradeMud()
 
@@ -63,7 +43,7 @@ def doUpgradeMud():
     listView["yscrollcommand"] = scrbar.set
     listView.grid(row=0, column=0, columnspan=2)
     cols = [{"key":"ip","width":100,"text":"IP"},
-            {"key":"result","width":300,"text":"Result"},
+            {"key":"result","width":350,"text":"Result"},
             {"key":"clearResult","width":300,"text":"ClearResult"},
             {"key":"isAAA","width":100,"text":"是否开启AAA"},
             {"key":"userName","width":100,"text":"账号"},
@@ -100,25 +80,29 @@ def doUpgradeMud():
         for i in range(1, nrows):
             ip = sheetR.cell(i, 0).value
             isAAA = sheetR.cell(i, 1).value
-            username = sheetR.cell(i, 2).value
+            userName = sheetR.cell(i, 2).value
             password = sheetR.cell(i, 3).value
             enablePassword = sheetR.cell(i, 4).value
             cmip = sheetR.cell(i, 5).value
             mask = sheetR.cell(i, 6).value
-            upgradeCcmts = UpgradeCcmts()
-            upgradeCcmts.connect(ip, isAAA, username, password, enablePassword,cmip,mask, logPath, sheetW, i, cvlan, gateway,
-                                 ftpServer, ftpUserName, ftpPassword, imageFileName,listView)
+            cmgateway = sheetR.cell(i, 7).value
+            pingTest = PingTest()
+            pingTest.connect(ip,isAAA,userName,password,enablePassword,cmip,mask,cmgateway,logPath,sheetW,i,listView)
 
             row = {"identifyKey": "ip",
-                   "ip": upgradeCcmts.host,
+                   "ip": pingTest.host,
                    "result": "start",
-                   "isAAA": upgradeCcmts.isAAA == '1',
-                   "userName": upgradeCcmts.userName,
-                   "password": upgradeCcmts.password,
-                   "enablePassword": upgradeCcmts.enablePassword}
-            upgradeCcmts.listView.insertRow(row)
-            upgradeCcmts.doTelnet()
-            upgradeCcmts.rebootOlt()
+                   "isAAA": pingTest.isAAA == '1',
+                   "userName": pingTest.userName,
+                   "password": pingTest.password,
+                   "enablePassword": pingTest.enablePassword}
+            pingTest.listView.insertRow(row)
+            pingTest.doTelnet()
+            pingTest.send('end')
+            str = pingTest.readuntil('#')
+            print str
+            re = pingTest.ping('50.2.4.1')
+            print re
     resultDialog.mainloop()
     wb.save(resultExcel)
 
