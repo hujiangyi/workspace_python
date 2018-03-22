@@ -59,7 +59,7 @@ class UpgradeCcmts(UpgradeOlt):
 
     def mduUpgrade(self,vlan,gateway,ftpServer,ftpUsername,ftpPassword,imageFileName):
         self.log('mduUpgrade')
-        self.allCmts,self.allkey,self.allVersion = self.getAllOnlineCmts(raiseException=True)
+        self.allCmts,self.allkey,self.allVersion,self.allMac = self.getAllOnlineCmts(raiseException=True)
         self.successCount = 0
         self.faildCount = 0
         boards = self.allBoard()
