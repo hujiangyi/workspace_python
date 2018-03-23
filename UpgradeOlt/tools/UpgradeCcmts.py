@@ -69,88 +69,90 @@ class UpgradeCcmts(UpgradeOlt):
             if '*' in slotId:
                 slotId = slotId[0:len(slotId) - 1]
             slotType[slotId] = board[2]
-        state,msg = self.confgVlan(vlan,gateway)
+        # state,msg = self.confgVlan(vlan,gateway)
         upgradeCmts = []
-        if state :
-            upgradeThreads = []
-            for slot,portMap in self.allCmts.items():
-                for port,deviceList in portMap.items():
-                    state,msg = self.doConfigPon(vlan,self.cmvlan,slot,port,slotType['{}'.format(slot)])
-                    if state :
-                        for device in deviceList:
-                            key = '{}/{}/{}'.format(slot,port,device)
-                            nversion = self.allVersion[key]
-                            mac = self.allMac[key]
-                            if nversion != None and nversion != 'no version' and nversion != '' and nversion != self.version:
-                                upgradeCmts.append(key)
-                                while True:
-                                    for t in upgradeThreads:
-                                        if not t.isAlive():
-                                            state,msg = t.getUpgradeResult()
-                                            if not state :
-                                                self.log(msg)
-                                                #self.writeResult(msg)
-                                                self.faildCount = self.faildCount + 1
-                                            else :
-                                                self.successCount = self.successCount + 1
-                                            upgradeThreads.remove(t)
-                                            break
-                                    if len(upgradeThreads) < self.threadNum :
-                                        configCcmtsIp = ConfigCcmtsIp()
-                                        configCcmtsIp.connect(self,self.host, self.isAAA, self.userName, self.password, self.enablePassword, self.cmip, self.mask,
-                                                             self.cmgateway, vlan, gateway,
-                                                             ftpServer,slot,port,device,slotType['{}'.format(slot)],self.cmvlan,self.logPath,mac)
-                                        configCcmtsIp.setDaemon(True)
-                                        configCcmtsIp.start()
-                                        upgradeThreads.append(configCcmtsIp)
-                                        time.sleep(1)
+        # if state :
+        upgradeThreads = []
+        for slot,portMap in self.allCmts.items():
+            for port,deviceList in portMap.items():
+                slotVlan = int(vlan) + int(slot)
+                slotGateway = int(gateway) + int(slot)
+                state,msg = self.doConfigPon(slotVlan,self.cmvlan,slot,port,slotType['{}'.format(slot)],slotGateway)
+                if state :
+                    for device in deviceList:
+                        key = '{}/{}/{}'.format(slot,port,device)
+                        nversion = self.allVersion[key]
+                        mac = self.allMac[key]
+                        if nversion != None and nversion != 'no version' and nversion != '' and nversion != self.version:
+                            upgradeCmts.append(key)
+                            while True:
+                                for t in upgradeThreads:
+                                    if not t.isAlive():
+                                        state,msg = t.getUpgradeResult()
+                                        if not state :
+                                            self.log(msg)
+                                            #self.writeResult(msg)
+                                            self.faildCount = self.faildCount + 1
+                                        else :
+                                            self.successCount = self.successCount + 1
+                                        upgradeThreads.remove(t)
                                         break
-                                    else :
-                                        time.sleep(10)
-                            else :
-                                row = {"identifyKey": "ip",
-                                       "ip": slot + '/' + port + '/' + device,
-                                       "result": "start",
-                                       "clearResult": "",
-                                       "isAAA": self.isAAA == '1',
-                                       "userName": self.userName,
-                                       "password": self.password,
-                                       "enablePassword": self.enablePassword}
-                                self.listView.insertChildRow(self.host,row)
-                                self.listView.setData('{}_{}'.format(self.host, key), 'result', nversion)
-                    else :
-                        self.log(msg)
-                        #self.writeResult(msg)
+                                if len(upgradeThreads) < self.threadNum :
+                                    configCcmtsIp = ConfigCcmtsIp()
+                                    configCcmtsIp.connect(self,self.host, self.isAAA, self.userName, self.password, self.enablePassword, self.cmip, self.mask,
+                                                         self.cmgateway, slotVlan, slotGateway,
+                                                         ftpServer,slot,port,device,slotType['{}'.format(slot)],self.cmvlan,self.logPath,mac)
+                                    configCcmtsIp.setDaemon(True)
+                                    configCcmtsIp.start()
+                                    upgradeThreads.append(configCcmtsIp)
+                                    time.sleep(1)
+                                    break
+                                else :
+                                    time.sleep(10)
+                        else :
+                            row = {"identifyKey": "ip",
+                                   "ip": slot + '/' + port + '/' + device,
+                                   "result": "start",
+                                   "clearResult": "",
+                                   "isAAA": self.isAAA == '1',
+                                   "userName": self.userName,
+                                   "password": self.password,
+                                   "enablePassword": self.enablePassword}
+                            self.listView.insertChildRow(self.host,row)
+                            self.listView.setData('{}_{}'.format(self.host, key), 'result', nversion)
+                else :
+                    self.log(msg)
+                    #self.writeResult(msg)
 
-            while True:
-                if len(upgradeThreads) == 0:
+        while True:
+            if len(upgradeThreads) == 0:
+                break
+            removeThread = []
+            for t in upgradeThreads:
+                if not t.isAlive():
+                    state, msg = t.getUpgradeResult()
+                    if not state:
+                        self.log(msg)
+                        # self.writeResult(msg)
+                        self.faildCount = self.faildCount + 1
+                    else:
+                        self.successCount = self.successCount + 1
+                    removeThread.append(t)
                     break
-                removeThread = []
-                for t in upgradeThreads:
-                    if not t.isAlive():
-                        state, msg = t.getUpgradeResult()
-                        if not state:
-                            self.log(msg)
-                            # self.writeResult(msg)
-                            self.faildCount = self.faildCount + 1
-                        else:
-                            self.successCount = self.successCount + 1
-                        removeThread.append(t)
-                        break
-                for t in removeThread:
-                    upgradeThreads.remove(t)
-        else :
-            self.log(msg)
+            for t in removeThread:
+                upgradeThreads.remove(t)
+        # else :
+        #     self.log(msg)
             #self.writeResult(msg)
         if len(upgradeCmts) > 0:
             self.send('end')
             self.readuntil('#')
             self.send('configure terminal')
             self.readuntil('(config)#')
-            self.send('upgrade mdu image ftp ' + ftpServer + ' ' + ftpUsername + ' ' + ftpPassword + ' ' + imageFileName)
-            self.readuntil('Upgrade software image of all mdu device? (y/n) [n]')
-            self.send('y')
-            self.readuntil('(config)#')
+            # self.send('upgrade mdu image ftp ' + ftpServer + ' ' + ftpUsername + ' ' + ftpPassword + ' ' + imageFileName)
+            # self.readuntil('Upgrade software image of all mdu device? (y/n) [n]')
+            # self.send('y')
+            # self.readuntil('(config)#')
             return True
         else :
             return False
@@ -158,22 +160,24 @@ class UpgradeCcmts(UpgradeOlt):
 
     ####################################################CC upgrade######################################################
     def confgVlan(self,vlan,gateway):
-        self.log('makeVlan ' + vlan + ' gateway ' + gateway + '.254.0.1')
+        self.log('makeVlan {} gateway {}.254.0.1'.format(vlan,gateway))
         self.send('end')
         self.readuntil('#')
         self.send('configure terminal')
         self.readuntil('(config)#')
-        self.send('vlan ' + vlan)
-        self.readuntil('(config-vlan-' + vlan + ')#')
-        self.send('vlan-interface ip-address ' + gateway + '.254.0.1 255.0.0.0')
-        re = self.readuntil('(config-vlan-' + vlan + ')#')
+        self.send('vlan {}'.format(vlan))
+        self.readuntil('(config-vlan-{})#'.format(vlan))
+        self.send('vlan-interface ip-address {}.254.0.1 255.0.0.0'.format(gateway))
+        re = self.readuntil('(config-vlan-{})#'.format(vlan))
         if '%' in re and '%Entry exists' not in re:
             return False,re
         else:
             return True,''
 
-    def doConfigPon(self,vlan,cmvlan,slot,port,slotType):
+    def doConfigPon(self,vlan,cmvlan,slot,port,slotType,gateway):
         self.log('configPon vlan {} cm vlan{} key{}/{}'.format(vlan,cmvlan,slot,port))
+        self.confgVlan(vlan,gateway)
+        time.sleep(2)
         self.send('end')
         self.readuntil('#')
         self.send('configure terminal')
@@ -313,13 +317,13 @@ class UpgradeCcmts(UpgradeOlt):
                                 state,finish,result = self.checkCmtsUpgradeStatus(slot,port,device)
                                 if state:
                                     upgradeStatus[key] = state
-                                    self.log('{} upgrade state :{}:{}'.format(key,state,result),cmts=slot + '/' + port + '/' + device)
+                                    self.log('{} upgrade state :{}:{}'.format(key,state,result),cmts=key)
                                 else :
                                     if finish:
                                         upgradeStatus[key] = state
-                                        self.log('{} upgrade state :{}:{}'.format(key,state,result),cmts=slot + '/' + port + '/' + device)
+                                        self.log('{} upgrade state :{}:{}'.format(key,state,result),cmts=key)
                                     else :
-                                        self.log('{} upgrade not finish{}'.format(key,result),cmts=slot + '/' + port + '/' + device)
+                                        self.log('{} upgrade not finish{}'.format(key,result),cmts=key)
             self.log('allKey:{};upgradeStatus{}'.format(len(allKey),len(upgradeStatus)))
             if len(allKey) == len(upgradeStatus):
                 return
@@ -328,13 +332,14 @@ class UpgradeCcmts(UpgradeOlt):
 
 
     def doClearOnuIp(self,vlan,slot,port,device):
-        self.log('doClearOnuIp vlan '+ vlan + ' ' + slot + '/' + port + '/' + device,cmts=slot + '/' + port + '/' + device,headName='clearResult')
+        key = '{}/{}/{}'.format(slot,port,device)
+        self.log('doClearOnuIp vlan {} {}/{}/{}'.format(vlan,slot,port,device),cmts=key,headName='clearResult')
         self.send('end')
         self.readuntil('#')
         self.send('configure terminal')
         self.readuntil('(config)#')
-        self.send('interface ccmts ' + slot + '/' + port + '/' + device)
-        self.readuntil('(config-if-ccmts-' + slot + '/' + port + '/' + device + ')#')
+        self.send('interface ccmts {}'.format(key))
+        self.readuntil('(config-if-ccmts-{})#'.format(key))
         self.send('no onu-ipconfig cvlan ' + vlan)
         re = self.readuntil('(config-if-ccmts-' + slot + '/' + port + '/' + device + ')#')
         if '%' in re:
@@ -345,30 +350,31 @@ class UpgradeCcmts(UpgradeOlt):
             return True,''
 
     def doClearPonVlanConfig(self,vlan,slot,port):
-        self.log('doClearPonVlanConfig vlan '+ vlan + ' '+ slot + '/' + port,headName='clearResult')
+        self.log('doClearPonVlanConfig vlan {} {}/{}'.format(vlan,slot,port),headName='clearResult')
+        self.doClearVlanConfig(vlan)
         self.send('end')
         self.readuntil('#')
         self.send('configure terminal')
         self.readuntil('(config)#')
-        self.send('interface pon ' + slot + '/' + port)
-        self.readuntil('(config-if-pon-' + slot + '/' + port +')#')
-        self.send('no vlan batch ' + vlan + ' transparent')
-        re = self.readuntil('(config-if-pon-' + slot + '/' + port +')#')
+        self.send('interface pon {}/{}'.format(slot,port))
+        self.readuntil('(config-if-pon-{}/{})#'.format(slot,port))
+        self.send('no vlan batch {} transparent'.format(vlan))
+        re = self.readuntil('(config-if-pon-{}/{})#'.format(slot,port))
         if '%' in re:
             return False,re
         else:
             return True,''
 
     def doClearVlanConfig(self,vlan):
-        self.log('doClearVlanConfig vlan '+ vlan,headName='clearResult')
+        self.log('doClearVlanConfig vlan {}'.format(vlan),headName='clearResult')
         self.send('end')
         self.readuntil('#')
         self.send('configure terminal')
         self.readuntil('(config)#')
-        self.send('vlan ' + vlan)
-        self.readuntil('(config-vlan-' + vlan + ')#')
+        self.send('vlan {}'.format(vlan))
+        self.readuntil('(config-vlan-{})#'.format(vlan))
         self.send('no vlan-interface')
-        re = self.readuntil('(config-vlan-' + vlan + ')#')
+        re = self.readuntil('(config-vlan-{})#'.format(vlan))
         if '%' in re:
             return False,re
         else:
@@ -386,6 +392,7 @@ class UpgradeCcmts(UpgradeOlt):
         resetThreads = []
         for slot, portMap in self.allCmts.items():
             for port, deviceList in portMap.items():
+                slotGateway = int(self.gateway) + int(slot)
                 for device in deviceList:
                     key = '{}/{}/{}'.format(slot,port,device)
                     nversion = self.allVersion[key]
@@ -407,7 +414,7 @@ class UpgradeCcmts(UpgradeOlt):
                             if len(resetThreads) < self.threadNum / 2:
                                 resetCcmts = ResetCcmts()
                                 resetCcmts.connect(self, self.host, self.isAAA, self.userName, self.password,
-                                                      self.enablePassword, self.gateway, slot, port, device,  self.logPath, mac)
+                                                      self.enablePassword, slotGateway, slot, port, device,  self.logPath, mac)
                                 resetCcmts.setDaemon(True)
                                 resetCcmts.start()
                                 resetThreads.append(resetCcmts)
@@ -438,16 +445,14 @@ class UpgradeCcmts(UpgradeOlt):
         self.log('clearConfig',headName='clearResult')
         for slot,portMap in self.allCmts.items():
             for port,deviceList in portMap.items():
+                slotVlan = int(vlan) + int(slot)
                 #for device in deviceList:
                     #state,msg = self.doClearOnuIp(vlan,slot,port,device)
                     #if not state :
                     #    self.writeResult(msg)
-                state,msg = self.doClearPonVlanConfig(vlan,slot,port)
+                state,msg = self.doClearPonVlanConfig(slotVlan,slot,port)
                 if not state :
                     self.writeResult(msg)
-        state,msg = self.doClearVlanConfig(vlan)
-        if not state:
-            self.writeResult(msg)
     def doResetCmts(self):
         self.log('doResetCmts',headName='clearResult')
         bArray,bKeys,allVersion,allMac = self.getAllOnlineCmts()

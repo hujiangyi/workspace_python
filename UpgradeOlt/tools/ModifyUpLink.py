@@ -52,10 +52,11 @@ class ModifyUpLink(UpgradeCcmts):
         self.faildCount = 0
         configThreads = []
         filterMap = self.makeFilterMap(self.ccFilter)
-        state,msg = self.confgVlan(vlan,gateway)
         for slot,portMap in self.allCmts.items():
             for port,deviceList in portMap.items():
-                state,msg = self.doConfigPon(vlan,0,slot,port,'epu')
+                slotVlan = int(vlan) + int(slot)
+                slotGateway = int(gateway) + int(slot)
+                state,msg = self.doConfigPon(slotVlan,0,slot,port,'epu',slotGateway)
                 for device in deviceList:
                     key = '{}/{}/{}'.format(slot,port,device)
                     if '*' not in filterMap:

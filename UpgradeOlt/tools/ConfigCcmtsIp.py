@@ -44,8 +44,9 @@ class ConfigCcmtsIp(UpgradeOlt):
 
 
     def doConfigCcmts(self,vlan,gateway,ftpServer,slot,port,device):
+        key = '{}/{}/{}'.format(slot,port,device)
         row = {"identifyKey": "ip",
-               "ip": slot + '/' + port + '/' + device,
+               "ip": key,
                "result": "start",
                "clearResult": "",
                "isAAA": self.isAAA == '1',
@@ -53,15 +54,15 @@ class ConfigCcmtsIp(UpgradeOlt):
                "password": self.password,
                "enablePassword": self.enablePassword}
         self.parent.listView.insertChildRow(self.host,row)
-        self.parent.log('configCcmts vlan '+ vlan + ' ' + slot + '/' + port + '/' + device,cmts=slot + '/' + port + '/' + device)
+        self.parent.log('configCcmts vlan {} {}/{}/{}'.format(vlan,slot,port,device),cmts=key)
         self.send('end')
         self.readuntil('#')
         self.send('configure terminal')
         self.readuntil('(config)#')
-        self.send('interface ccmts ' + slot + '/' + port + '/' + device)
-        self.readuntil('(config-if-ccmts-' + slot + '/' + port + '/' + device + ')#')
-        self.send('onu-ipconfig ip-address ' + gateway + '.' + slot + '.' + port + '.' + device +  ' mask 255.0.0.0 gateway ' + gateway + '.254.0.1 cvlan ' + vlan)
-        re = self.readuntil('(config-if-ccmts-' + slot + '/' + port + '/' + device + ')#')
+        self.send('interface ccmts {}'.format(key))
+        self.readuntil('(config-if-ccmts-{})#'.format(key))
+        self.send('onu-ipconfig ip-address {0}.{1}.{2}.{3} mask 255.0.0.0 gateway {0}.254.0.1 cvlan {4}'.format(gateway,slot,port,device,vlan))
+        re = self.readuntil('(config-if-ccmts-{})#'.format(key))
         if '%This command does not support GPON CCMTS, and the corresponding GPON' in re:
             self.send('exit')
             self.readuntil('(config)#')
@@ -78,21 +79,22 @@ class ConfigCcmtsIp(UpgradeOlt):
         self.parent.log('ping {} success'.format(ip))
         self.parent.log('do telnet {}'.format(ip))
         self.send('telnet {}'.format(ip))
-        self.send('telnet ' + gateway + '.' + slot + '.' + port + '.' + device)
-        re = self.readuntilMutl(['Username:','username:','%Telnet exit successful','%Error:Connect to {}.{}.{}.{} timeout!'.format(gateway,slot,port,device),'%Connect to ' + gateway + '.' + slot + '.' + port + '.' + device + ' timeout!'])
+        re = self.readuntilMutl(['Username:','username:','%Telnet exit successful','%Error:Connect to {} timeout!'.format(ip),'%Connect to {} timeout!'.format(ip)])
         if '%Telnet exit successful' in re:
-            self.parent.log('%Telnet exit successful',cmts=slot + '/' + port + '/' + device)
+            self.parent.log('%Telnet exit successful',cmts=key)
             while True:
                 time.sleep(10)
             # return False,'%Telnet exit successful'
-        elif '%Connect to ' + gateway + '.' + slot + '.' + port + '.' + device + ' timeout!' in re or '%Error:Connect to {}.{}.{}.{} timeout!'.format(gateway,slot,port,device) in re:
-            self.parent.log('%Connect to ' + gateway + '.' + slot + '.' + port + '.' + device + ' timeout!',cmts=slot + '/' + port + '/' + device)
-            return False,'%Connect to ' + gateway + '.' + slot + '.' + port + '.' + device + ' timeout!'
+        elif '%Connect to {} timeout!'.format(ip) in re or '%Error:Connect to {} timeout!'.format(ip) in re:
+            self.parent.log('%Connect to {} timeout!'.format(ip),cmts=key)
+            return False,'%Connect to {} timeout!'.format(ip)
         self.send('admin')
         self.send('admin')
         self.send('enable')
         re = self.readuntilII('#')
         cmIp = None
+        self.send('show ccmts verbose')
+        self.readuntil('#')
         if not self.useNetRange :
             self.send('show cable modem | include online')
             re = self.readuntil('#')
@@ -101,10 +103,10 @@ class ConfigCcmtsIp(UpgradeOlt):
                 cols = lines[1].split()
                 cmIp = cols[1]
                 self.cmgateway = None
-                self.parent.log('cmts ip is ' + cmIp, cmts=slot + '/' + port + '/' + device)
+                self.parent.log('cmts ip is {}'.format(cmIp), cmts=key)
                 state,msg = self.configCmtsIp(cmIp, ftpServer,slot,port,device)
             else:
-                self.parent.log('cmts does not specify.', cmts=slot + '/' + port + '/' + device)
+                self.parent.log('cmts does not specify.', cmts=key)
                 return False, 'cmts does not specify.'
         else :
             cmIp = self.parent.nextIp()
@@ -118,7 +120,7 @@ class ConfigCcmtsIp(UpgradeOlt):
                         cmIp = self.parent.nextIp()
                 else:
                     break
-            self.parent.log('cmts ip is ' + cmIp, cmts=slot + '/' + port + '/' + device)
+            self.parent.log('cmts ip is {}'.format(cmIp), cmts=key)
             state,msg = self.configCmtsIp(cmIp,ftpServer,slot,port,device)
             while not state:
                 cmIp = self.parent.nextIp()
@@ -157,15 +159,15 @@ class ConfigCcmtsIp(UpgradeOlt):
         if self.cmvlan != 0:
             self.send('interface vlanif {}'.format(self.cmvlan))
             self.readuntil('#')
-            self.send('ip address ' + cmIp + ' ' + self.mask + ' primary')
+            self.send('ip address {} {} primary'.format(cmIp,self.mask))
             self.readuntil('#')
             self.send('exit')
             self.readuntil('#')
         else :
-            self.send('ip address ' + cmIp + ' ' + self.mask + ' primary')
+            self.send('ip address {} {} primary'.format(cmIp,self.mask))
             self.readuntil('#')
         if self.cmgateway != None:
-            self.send('gateway ' + self.cmgateway + '')
+            self.send('gateway {}'.format(self.cmgateway) )
             self.readuntil('(config)#')
         self.send('super')
         self.readuntilII('Password:')
@@ -173,7 +175,7 @@ class ConfigCcmtsIp(UpgradeOlt):
         self.readuntil('(config-super)#')
         self.send('shell')
         self.readuntil('#')
-        self.send('ping ' + ftpServer)
+        self.send('ping {}'.format(ftpServer))
         self.readuntil('#')
         self.send('echo $?')
         re = self.readuntil('#')
@@ -190,10 +192,10 @@ class ConfigCcmtsIp(UpgradeOlt):
             if '#' in s:
                 continue
             if '0' == s:
-                self.parent.log('{}config success!cmIp:{}'.format(key,cmIp), cmts=slot + '/' + port + '/' + device)
+                self.parent.log('{}config success!cmIp:{}'.format(key,cmIp), cmts=key)
                 return True, ''
             else:
-                self.parent.log('{}ftp server can not connect.cmIp:{}'.format(key,cmIp), cmts=slot + '/' + port + '/' + device)
+                self.parent.log('{}ftp server can not connect.cmIp:{}'.format(key,cmIp), cmts=key)
                 return False, '{}ftp server can not connect.cmIp:{}'.format(key,cmIp)
 
     def cmdLog(self, str):
@@ -207,7 +209,7 @@ class ConfigCcmtsIp(UpgradeOlt):
     def log(self, str,cmts=None,headName='result'):
         self.parent.log(str,cmts,headName)
         try:
-            str = datetime.datetime.now().strftime('%Y%m%d%H%M%S\t') + str + '\n'
+            str = '{} {}\n'.format(datetime.datetime.now().strftime('%Y%m%d%H%M%S\t'),str)
             self.logResultFile.write(str)
             self.logResultFile.flush()
         except BaseException, msg:

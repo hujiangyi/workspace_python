@@ -37,7 +37,8 @@ class ResetCcmtsDol(UpgradeOlt):
         return self.state,self.msg
 
     def reset3219(self,gateway,slot,port,device):
-        self.parent.log('configCcmts ' + slot + '/' + port + '/' + device,cmts=slot + '/' + port + '/' + device)
+        key = '{}/{}/{}'.format(slot,port,device)
+        self.parent.log('configCcmts {}'.format(key),cmts=key)
         self.send('end')
         self.readuntil('#')
         self.send('configure terminal')
@@ -47,7 +48,7 @@ class ResetCcmtsDol(UpgradeOlt):
         self.send(self.sp())
         re = self.readuntilMutl(['(config-super)#','(config)#'])
         if '%Bad password.' in re:
-            self.parent.log('%Enter super model error(Bad password)',cmts=slot + '/' + port + '/' + device)
+            self.parent.log('%Enter super model error(Bad password)',cmts=key)
             return False,'%Enter super model error(Bad password)'
         self.send('test')
         self.readuntil('(config-super-test)#')
@@ -80,7 +81,7 @@ class ResetCcmtsDol(UpgradeOlt):
     def log(self, str,cmts=None,headName='result'):
         self.parent.log(str,cmts,headName)
         try:
-            str = datetime.datetime.now().strftime('%Y%m%d%H%M%S\t') + str + '\n'
+            str = '{} {}\n'.format(datetime.datetime.now().strftime('%Y%m%d%H%M%S\t'), str )
             self.logResultFile.write(str)
             self.logResultFile.flush()
         except BaseException, msg:

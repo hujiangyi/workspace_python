@@ -42,7 +42,8 @@ class ResetCcmts(UpgradeOlt):
         return self.state,self.msg
 
     def doConfigCcmts(self,gateway,slot,port,device):
-        self.parent.log('configCcmts ' + slot + '/' + port + '/' + device,cmts=slot + '/' + port + '/' + device)
+        key = '{}/{}/{}'.format(slot,port,device)
+        self.parent.log('configCcmts {}'.format(key),cmts=key)
         self.send('end')
         self.readuntil('#')
         ip = '{}.{}.{}.{}'.format(gateway,slot,port,device)
@@ -53,19 +54,21 @@ class ResetCcmts(UpgradeOlt):
         self.parent.log('ping {} success'.format(ip))
         self.parent.log('do telnet {}'.format(ip))
         self.send('telnet {}'.format(ip))
-        re = self.readuntilMutl(['Username:','username:','%Telnet exit successful','%Error:Connect to {}.{}.{}.{} timeout!'.format(gateway,slot,port,device),'%Connect to ' + gateway + '.' + slot + '.' + port + '.' + device + ' timeout!'])
+        re = self.readuntilMutl(['Username:','username:','%Telnet exit successful','%Error:Connect to {} timeout!'.format(ip),'%Connect to {} timeout!'.format(ip)])
         if '%Telnet exit successful' in re:
-            self.parent.log('%Telnet exit successful',cmts=slot + '/' + port + '/' + device)
+            self.parent.log('%Telnet exit successful',cmts=key)
             while True:
                 time.sleep(10)
             # return False,'%Telnet exit successful'
-        elif '%Connect to ' + gateway + '.' + slot + '.' + port + '.' + device + ' timeout!' in re or '%Error:Connect to {}.{}.{}.{} timeout!'.format(gateway,slot,port,device) in re:
-            self.parent.log('%Connect to ' + gateway + '.' + slot + '.' + port + '.' + device + ' timeout!',cmts=slot + '/' + port + '/' + device)
-            return False,'%Connect to ' + gateway + '.' + slot + '.' + port + '.' + device + ' timeout!'
+        elif '%Connect to {} timeout!'.format(ip) in re or '%Error:Connect to {} timeout!'.format(ip) in re:
+            self.parent.log('%Connect to {} timeout!'.format(ip),cmts=key)
+            return False,'%Connect to {} timeout!'.format(ip)
         self.send('admin')
         self.send('admin')
         self.send('enable')
         self.readuntilII('#')
+        self.send('show ccmts verbose')
+        self.readuntil('#')
         return self.resetCcmts(slot,port,device)
 
     def resetCcmts(self,slot,port,device):
@@ -106,7 +109,7 @@ class ResetCcmts(UpgradeOlt):
     def log(self, str,cmts=None,headName='result'):
         self.parent.log(str,cmts,headName)
         try:
-            str = datetime.datetime.now().strftime('%Y%m%d%H%M%S\t') + str + '\n'
+            str = '{} {}\n'.format(datetime.datetime.now().strftime('%Y%m%d%H%M%S\t'), str )
             self.logResultFile.write(str)
             self.logResultFile.flush()
         except BaseException, msg:

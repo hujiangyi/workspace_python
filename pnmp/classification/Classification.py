@@ -2,19 +2,20 @@ from pnmp.classification.BaseClassification import BaseClassification
 
 import datetime
 
-class WHClassification(BaseClassification) :
+class Classification(BaseClassification) :
     def __init__(self):
+        path = 'mas/'
         self.filterIp = []
         self.oltMtrResult = {}
         self.sheetWMap = {}
         self.colName = [ 'ip','mac','managerIp','cmcIndex','cmIndex','equalizationData','upChannelId','upChannelFreq','upChannelWidth','upTxPower','upRxPower','upSignalNoise','mtc','mtr','freqResult','amplitudes']
-        excel = 'Calculation.xls'
-        resultExcel = 'Classification_filter_{}.xls'.format(datetime.datetime.now().strftime('%Y%m%d%H%M%S'))
+        excel = '{}Calculation.xls'.format(path)
+        resultExcel = '{}Classification_filter_{}.xls'.format(path,datetime.datetime.now().strftime('%Y%m%d%H%M%S'))
         BaseClassification.__init__(self,excel,resultExcel)
 
     def createSheetName(self,ip, cmcIndex, channelId):
         try:
-            return ip + '_' + `int(cmcIndex)` + '_' + `int(channelId)`
+            return '{}_{}_{}'.format(ip,cmcIndex,channelId)
         except:
             print ip
             print cmcIndex
@@ -63,5 +64,5 @@ class WHClassification(BaseClassification) :
                         self.insertRow(wb, 'main',self.colName,col)
 
 if __name__ == '__main__' :
-    bc =WHClassification()
+    bc =Classification()
     bc.excelParser()
