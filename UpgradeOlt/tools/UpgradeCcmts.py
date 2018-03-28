@@ -150,10 +150,10 @@ class UpgradeCcmts(UpgradeOlt):
             self.readuntil('#')
             self.send('configure terminal')
             self.readuntil('(config)#')
-            # self.send('upgrade mdu image ftp ' + ftpServer + ' ' + ftpUsername + ' ' + ftpPassword + ' ' + imageFileName)
-            # self.readuntil('Upgrade software image of all mdu device? (y/n) [n]')
-            # self.send('y')
-            # self.readuntil('(config)#')
+            self.send('upgrade mdu image ftp ' + ftpServer + ' ' + ftpUsername + ' ' + ftpPassword + ' ' + imageFileName)
+            self.readuntil('Upgrade software image of all mdu device? (y/n) [n]')
+            self.send('y')
+            self.readuntil('(config)#')
             return True
         else :
             return False
