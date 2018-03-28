@@ -54,8 +54,8 @@ class ModifyUpLink(UpgradeCcmts):
         filterMap = self.makeFilterMap(self.ccFilter)
         for slot,portMap in self.allCmts.items():
             for port,deviceList in portMap.items():
-                slotVlan = int(vlan) + int(slot)
-                slotGateway = int(gateway) + int(slot)
+                slotVlan = int(vlan)
+                slotGateway = int(gateway)
                 state,msg = self.doConfigPon(slotVlan,0,slot,port,'epu',slotGateway)
                 for device in deviceList:
                     key = '{}/{}/{}'.format(slot,port,device)

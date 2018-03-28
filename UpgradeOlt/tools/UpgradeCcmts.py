@@ -10,6 +10,7 @@ class UpgradeCcmts(UpgradeOlt):
         row={"identifyKey":"ip",
              "ip":self.host,
              "result":"start",
+             "clearResult":"",
              "isAAA":self.isAAA == '1',
              "userName":self.userName,
              "password":self.password,
@@ -75,8 +76,8 @@ class UpgradeCcmts(UpgradeOlt):
         upgradeThreads = []
         for slot,portMap in self.allCmts.items():
             for port,deviceList in portMap.items():
-                slotVlan = int(vlan) + int(slot)
-                slotGateway = int(gateway) + int(slot)
+                slotVlan = int(vlan)
+                slotGateway = int(gateway)
                 state,msg = self.doConfigPon(slotVlan,self.cmvlan,slot,port,slotType['{}'.format(slot)],slotGateway)
                 if state :
                     for device in deviceList:
@@ -304,6 +305,7 @@ class UpgradeCcmts(UpgradeOlt):
         self.log('checkAllUpgradeStatus')
         allKey = []
         upgradeStatus = {}
+        upgradeStatusTimeout = {}
         while True:
             for slot,portMap in self.allCmts.items():
                 for port,deviceList in portMap.items():
@@ -323,9 +325,24 @@ class UpgradeCcmts(UpgradeOlt):
                                         upgradeStatus[key] = state
                                         self.log('{} upgrade state :{}:{}'.format(key,state,result),cmts=key)
                                     else :
+                                        if not upgradeStatusTimeout.has_key(key) :
+                                            upgradeStatusTimeout[key] = {
+                                                'line' : result,
+                                                'checktime' : int(time.time())
+                                            }
+                                        else :
+                                            o = upgradeStatusTimeout[key]
+                                            if o['line'] == result:
+                                                if int(time.time()) - o['checktime'] > 60 :
+                                                    upgradeStatus[key] = state
+                                                    self.log('{} upgrade state :{}:{}'.format(key,state,result),cmts=key)
+                                            else :
+                                                o['checktime'] = int(time.time())
+                                                upgradeStatusTimeout[key] = o
                                         self.log('{} upgrade not finish{}'.format(key,result),cmts=key)
             self.log('allKey:{};upgradeStatus{}'.format(len(allKey),len(upgradeStatus)))
             if len(allKey) == len(upgradeStatus):
+                self.upgradeStatus = upgradeStatus
                 return
             time.sleep(30)
 
@@ -395,33 +412,34 @@ class UpgradeCcmts(UpgradeOlt):
                 slotGateway = int(self.gateway) + int(slot)
                 for device in deviceList:
                     key = '{}/{}/{}'.format(slot,port,device)
-                    nversion = self.allVersion[key]
-                    mac = self.allMac[key]
-                    if nversion != None and nversion != 'no version' and nversion != '' and nversion != self.version:
-                        resetCmts.append(key)
-                        while True:
-                            for t in resetThreads:
-                                if not t.isAlive():
-                                    state, msg = t.getResetResult()
-                                    if not state:
-                                        self.log(msg)
-                                        # self.writeResult(msg)
-                                        self.faildCount = self.faildCount + 1
-                                    else:
-                                        self.successCount = self.successCount + 1
-                                    resetThreads.remove(t)
+                    if self.upgradeStatus[key] :
+                        nversion = self.allVersion[key]
+                        mac = self.allMac[key]
+                        if nversion != None and nversion != 'no version' and nversion != '' and nversion != self.version:
+                            resetCmts.append(key)
+                            while True:
+                                for t in resetThreads:
+                                    if not t.isAlive():
+                                        state, msg = t.getResetResult()
+                                        if not state:
+                                            self.log(msg)
+                                            # self.writeResult(msg)
+                                            self.faildCount = self.faildCount + 1
+                                        else:
+                                            self.successCount = self.successCount + 1
+                                        resetThreads.remove(t)
+                                        break
+                                if len(resetThreads) < self.threadNum / 2:
+                                    resetCcmts = ResetCcmts()
+                                    resetCcmts.connect(self, self.host, self.isAAA, self.userName, self.password,
+                                                          self.enablePassword, slotGateway, slot, port, device,  self.logPath, mac)
+                                    resetCcmts.setDaemon(True)
+                                    resetCcmts.start()
+                                    resetThreads.append(resetCcmts)
+                                    time.sleep(1)
                                     break
-                            if len(resetThreads) < self.threadNum / 2:
-                                resetCcmts = ResetCcmts()
-                                resetCcmts.connect(self, self.host, self.isAAA, self.userName, self.password,
-                                                      self.enablePassword, slotGateway, slot, port, device,  self.logPath, mac)
-                                resetCcmts.setDaemon(True)
-                                resetCcmts.start()
-                                resetThreads.append(resetCcmts)
-                                time.sleep(1)
-                                break
-                            else:
-                                time.sleep(10)
+                                else:
+                                    time.sleep(10)
 
         while True:
             if len(resetThreads) == 0:
@@ -445,7 +463,7 @@ class UpgradeCcmts(UpgradeOlt):
         self.log('clearConfig',headName='clearResult')
         for slot,portMap in self.allCmts.items():
             for port,deviceList in portMap.items():
-                slotVlan = int(vlan) + int(slot)
+                slotVlan = int(vlan)
                 #for device in deviceList:
                     #state,msg = self.doClearOnuIp(vlan,slot,port,device)
                     #if not state :
@@ -463,7 +481,8 @@ class UpgradeCcmts(UpgradeOlt):
             self.log('online cmts count before reset(' + `len(bKeys)` + ') after reset(' + `len(nbKeys)` + ')')
             if len(bKeys) == len(nbKeys) :
                 for key,version in allVersion.items():
-                    self.listView.setData('{}_{}'.format(self.host,key), 'result', version)
+                    if self.upgradeStatus[key]:
+                        self.listView.setData('{}_{}'.format(self.host,key), 'result', version)
                 break
             time.sleep(30)
 

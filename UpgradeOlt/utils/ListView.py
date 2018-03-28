@@ -27,13 +27,11 @@ class ListView(Treeview):
                     value = row[key]
                     self.setData(identifyKey,key,value)
                     return
-            values = []
+            values = ['' for i in range(0, len(self.cols))]
             for key,col in self.cols.items():
                 if row.has_key(key) :
                     value = row[key]
-                    values.insert(col["index"],value)
-                else:
-                    values.insert(col["index"],'')
+                    values[col["index"]]=value
             rowKey = self.insert("","end",values=tuple(values))
             rowData = {}
             rowData["key"] = rowKey
@@ -48,13 +46,11 @@ class ListView(Treeview):
             if self.rows.has_key(parentKey):
                 rd = self.rows[parentKey]
                 parentItemKey = rd['key']
-                values = []
+                values = ['' for i in range(0, len(self.cols))]
                 for key,col in self.cols.items():
                     if row.has_key(key) :
                         value = row[key]
-                        values.insert(col["index"],value)
-                    else:
-                        values.insert(col["index"],'')
+                        values[col["index"]]=value
                 identifyKey = parentKey + "_" + row[row["identifyKey"]]
                 rowKey = self.insert(parentItemKey,"end",values=tuple(values))
                 rowData = {}
