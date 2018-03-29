@@ -64,12 +64,12 @@ class UpgradeCcmts(UpgradeOlt):
         self.successCount = 0
         self.faildCount = 0
         boards = self.allBoard()
-        slotType = {}
+        self.slotType = {}
         for board in boards:
             slotId = board[0]
             if '*' in slotId:
                 slotId = slotId[0:len(slotId) - 1]
-            slotType[slotId] = board[2]
+            self.slotType[slotId] = board[2]
         # state,msg = self.confgVlan(vlan,gateway)
         upgradeCmts = []
         # if state :
@@ -78,7 +78,7 @@ class UpgradeCcmts(UpgradeOlt):
             for port,deviceList in portMap.items():
                 slotVlan = int(vlan)
                 slotGateway = int(gateway)
-                state,msg = self.doConfigPon(slotVlan,self.cmvlan,slot,port,slotType['{}'.format(slot)],slotGateway)
+                state,msg = self.doConfigPon(slotVlan,self.cmvlan,slot,port,self.slotType['{}'.format(slot)],slotGateway)
                 if state :
                     for device in deviceList:
                         key = '{}/{}/{}'.format(slot,port,device)
@@ -102,7 +102,7 @@ class UpgradeCcmts(UpgradeOlt):
                                     configCcmtsIp = ConfigCcmtsIp()
                                     configCcmtsIp.connect(self,self.host, self.isAAA, self.userName, self.password, self.enablePassword, self.cmip, self.mask,
                                                          self.cmgateway, slotVlan, slotGateway,
-                                                         ftpServer,slot,port,device,slotType['{}'.format(slot)],self.cmvlan,self.logPath,mac)
+                                                         ftpServer,slot,port,device,self.slotType['{}'.format(slot)],self.cmvlan,self.logPath,mac)
                                     configCcmtsIp.setDaemon(True)
                                     configCcmtsIp.start()
                                     upgradeThreads.append(configCcmtsIp)
@@ -185,14 +185,15 @@ class UpgradeCcmts(UpgradeOlt):
         self.readuntil('(config)#')
         cmds = ['interface pon {}/{}'.format(slot,port),'interface gpon {}/{}'.format(slot,port)]
         cmd,re = self.checkCmd(cmds,errorMessage= 'interface number error.')
+        cv = cmvlan
         if cmd != None:
             if not self.isGpon(slotType):
-                if cmvlan == 1:
-                    cmvlan = 0
-            if cmvlan != 0:
+                if cv == 1:
+                    cv = 0
+            if cv != 0:
                 self.send('vlan batch {} transparent'.format(vlan))
                 self.readuntil('{}/{})#'.format(slot,port))
-                self.send('vlan batch {} transparent'.format(cmvlan))
+                self.send('vlan batch {} transparent'.format(cv))
             else :
                 self.send('vlan batch {} transparent'.format(vlan))
             re = self.readuntil('{}/{})#'.format(slot,port))
@@ -333,13 +334,15 @@ class UpgradeCcmts(UpgradeOlt):
                                         else :
                                             o = upgradeStatusTimeout[key]
                                             if o['line'] == result:
-                                                if int(time.time()) - o['checktime'] > 60 :
+                                                if int(time.time()) - o['checktime'] > 120 :
                                                     upgradeStatus[key] = state
                                                     self.log('{} upgrade state :{}:{}'.format(key,state,result),cmts=key)
+                                                else :
+                                                    self.log('{} upgrade not finish{}'.format(key, result), cmts=key)
                                             else :
                                                 o['checktime'] = int(time.time())
                                                 upgradeStatusTimeout[key] = o
-                                        self.log('{} upgrade not finish{}'.format(key,result),cmts=key)
+                                                self.log('{} upgrade not finish{}'.format(key,result),cmts=key)
             self.log('allKey:{};upgradeStatus{}'.format(len(allKey),len(upgradeStatus)))
             if len(allKey) == len(upgradeStatus):
                 self.upgradeStatus = upgradeStatus
@@ -358,7 +361,14 @@ class UpgradeCcmts(UpgradeOlt):
         self.send('interface ccmts {}'.format(key))
         self.readuntil('(config-if-ccmts-{})#'.format(key))
         self.send('no onu-ipconfig cvlan ' + vlan)
-        re = self.readuntil('(config-if-ccmts-' + slot + '/' + port + '/' + device + ')#')
+        re = self.readuntil('(config-if-ccmts-{})#'.format(key))
+        if '%This command does not support GPON CCMTS, and the corresponding GPON' in re:
+            self.send('exit')
+            self.readuntil('(config)#')
+            self.send('interface gpon {}/{}'.format(slot, port))
+            self.readuntil('(config-if-gpon-{}/{})#'.format(slot, port))
+            self.send('no onu-ipconfig {} ip-index 1'.format(device))
+            re = self.readuntil('(config-if-gpon-{}/{})#'.format(slot, port))
         if '%' in re:
             self.log('doClearOnuIp error.',cmts=slot + '/' + port + '/' + device,headName='clearResult')
             return False,re
@@ -366,21 +376,32 @@ class UpgradeCcmts(UpgradeOlt):
             self.log('doClearOnuIp success.',cmts=slot + '/' + port + '/' + device,headName='clearResult')
             return True,''
 
-    def doClearPonVlanConfig(self,vlan,slot,port):
+    def doClearPonVlanConfig(self,vlan,cmvlan,slot,port):
         self.log('doClearPonVlanConfig vlan {} {}/{}'.format(vlan,slot,port),headName='clearResult')
-        self.doClearVlanConfig(vlan)
         self.send('end')
         self.readuntil('#')
         self.send('configure terminal')
         self.readuntil('(config)#')
-        self.send('interface pon {}/{}'.format(slot,port))
-        self.readuntil('(config-if-pon-{}/{})#'.format(slot,port))
-        self.send('no vlan batch {} transparent'.format(vlan))
-        re = self.readuntil('(config-if-pon-{}/{})#'.format(slot,port))
-        if '%' in re:
+        cmds = ['interface pon {}/{}'.format(slot,port),'interface gpon {}/{}'.format(slot,port)]
+        cmd,re = self.checkCmd(cmds,errorMessage= 'interface number error.')
+        cv = cmvlan
+        if cmd != None:
+            if not self.isGpon(self.slotType['{}'.format(slot)]):
+                if cv == 1:
+                    cv = 0
+            if cv != 0:
+                self.send('no vlan batch {} transparent'.format(vlan))
+                self.readuntil('{}/{})#'.format(slot,port))
+                self.send('no vlan batch {} transparent'.format(cv))
+            else :
+                self.send('no vlan batch {} transparent'.format(vlan))
+            re = self.readuntil('{}/{})#'.format(slot,port))
+            if '%' in re:
+                return False,re
+            else:
+                return True,''
+        else :
             return False,re
-        else:
-            return True,''
 
     def doClearVlanConfig(self,vlan):
         self.log('doClearVlanConfig vlan {}'.format(vlan),headName='clearResult')
@@ -392,10 +413,30 @@ class UpgradeCcmts(UpgradeOlt):
         self.readuntil('(config-vlan-{})#'.format(vlan))
         self.send('no vlan-interface')
         re = self.readuntil('(config-vlan-{})#'.format(vlan))
+        if '% Unknown command.' in re:
+            self.send('exit')
+            self.readuntil('(config)#')
+            self.send('interface vlanif {}'.format(vlan))
+            self.readuntil('(config-vlanif-{})#'.format(vlan))
+            self.send('no ip address')
+            self.readuntil('(config-vlanif-{})#'.format(vlan))
+            self.send('exit')
+            self.readuntil('(config)#')
+            self.send('no interface vlanif {}'.format(vlan))
+            re = self.readuntil('(config)#')
         if '%' in re:
             return False,re
         else:
-            return True,''
+            self.send('end')
+            re = self.readuntil('#')
+            self.send('configure terminal')
+            self.readuntil('(config)#')
+            self.send('no vlan {}'.format(vlan))
+            re = self.readuntil('(config)#')
+            if '%' in re:
+                return False,re
+            else:
+                return True,''
 
     def resetCmts(self):
         self.log('reset all Cmts')
@@ -409,10 +450,10 @@ class UpgradeCcmts(UpgradeOlt):
         resetThreads = []
         for slot, portMap in self.allCmts.items():
             for port, deviceList in portMap.items():
-                slotGateway = int(self.gateway) + int(slot)
+                slotGateway = int(self.gateway)
                 for device in deviceList:
                     key = '{}/{}/{}'.format(slot,port,device)
-                    if self.upgradeStatus[key] :
+                    if self.upgradeStatus.has_key(key) :
                         nversion = self.allVersion[key]
                         mac = self.allMac[key]
                         if nversion != None and nversion != 'no version' and nversion != '' and nversion != self.version:
@@ -464,13 +505,14 @@ class UpgradeCcmts(UpgradeOlt):
         for slot,portMap in self.allCmts.items():
             for port,deviceList in portMap.items():
                 slotVlan = int(vlan)
-                #for device in deviceList:
-                    #state,msg = self.doClearOnuIp(vlan,slot,port,device)
-                    #if not state :
-                    #    self.writeResult(msg)
-                state,msg = self.doClearPonVlanConfig(slotVlan,slot,port)
+                for device in deviceList:
+                    state,msg = self.doClearOnuIp(vlan,slot,port,device)
+                    if not state :
+                       self.writeResult(msg)
+                state,msg = self.doClearPonVlanConfig(slotVlan,self.cmvlan,slot,port)
                 if not state :
                     self.writeResult(msg)
+        self.doClearVlanConfig(vlan)
     def doResetCmts(self):
         self.log('doResetCmts',headName='clearResult')
         bArray,bKeys,allVersion,allMac = self.getAllOnlineCmts()
@@ -481,7 +523,7 @@ class UpgradeCcmts(UpgradeOlt):
             self.log('online cmts count before reset(' + `len(bKeys)` + ') after reset(' + `len(nbKeys)` + ')')
             if len(bKeys) == len(nbKeys) :
                 for key,version in allVersion.items():
-                    if self.upgradeStatus[key]:
+                    if self.upgradeStatus.has_key(key):
                         self.listView.setData('{}_{}'.format(self.host,key), 'result', version)
                 break
             time.sleep(30)

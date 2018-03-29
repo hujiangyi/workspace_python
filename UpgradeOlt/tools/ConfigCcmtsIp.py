@@ -151,11 +151,12 @@ class ConfigCcmtsIp(UpgradeOlt):
         self.readuntil('(config)#')
         self.send('no ip address dhcp-alloc')
         self.readuntil('(config)#')
+        cv = self.cmvlan
         if not self.isGpon(self.slotType) :
-            if self.cmvlan == 1:
-                self.cmvlan = 0
-        if self.cmvlan != 0:
-            self.send('interface vlanif {}'.format(self.cmvlan))
+            if cv == 1:
+                cv = 0
+        if cv != 0:
+            self.send('interface vlanif {}'.format(cv))
             self.readuntil('#')
             self.send('ip address {} {} primary'.format(cmIp,self.mask))
             self.readuntil('#')
