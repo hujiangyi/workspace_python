@@ -1,3 +1,9 @@
+#! /usr/bin/env python
+# -*- coding: utf-8 -*-
+# vim:fenc=utf-8
+#
+# Copyright © 2014 jay <hujiangyi@dvt.dvt.com>
+#
 import traceback
 import time
 from UpgradeOlt import UpgradeOlt
@@ -20,6 +26,16 @@ class UpgradeCcmts(UpgradeOlt):
         self.doUpgrade()
     def doUpgrade(self):
         try:
+            # lvhaiting(吕海艇)
+            # 因为这样，如果你没在olt上关信道，第一次cc重启后，会有cm大量上线的过程
+            # lvhaiting(吕海艇)
+            # 所以还不如直接在olt上关信道。 这样你第二次的时候也不用登陆cc去关信道了
+            # lvhaiting(吕海艇)
+            # cm多的话，olt可能会扛不住
+            # lvhaiting(吕海艇)
+            # 会出现异常
+            self.closeChannel()
+            self.doResetCmts(beforeUpgrade=True)
             state = self.mduUpgrade(self.vlan,self.gateway,self.ftpServer,self.ftpUserName,self.ftpPassword,self.imageFileName)
             if state:
                 self.checkAllUpgradeStatus()
@@ -33,6 +49,8 @@ class UpgradeCcmts(UpgradeOlt):
             self.log(`msg`)
             self.writeResult(`msg`)
             print 'traceback.format_exc():\n%s' % traceback.format_exc()
+        finally:
+            self.openChannel()
     def doCollectData(self):
         try:
             self.collectData('after')
@@ -58,6 +76,50 @@ class UpgradeCcmts(UpgradeOlt):
         self.initLog(logPath,host)
         self.setTelnetArg(host,isAAA,userName,password,enablePassword)
 
+    def closeChannel(self):
+        self.log('closeChannel')
+        self.upgradeStatus = {}
+        self.allCmts,self.allkey,self.allVersion,self.allMac = self.getAllOnlineCmts(raiseException=True)
+        self.closeChannelCmtsKeys = self.allkey
+        self.closeChannelList = {}
+        self.send('end')
+        self.readuntil('#')
+        self.send('configure terminal')
+        self.readuntil('(config)#')
+        for key in self.closeChannelCmtsKeys:
+            self.log('close cmts{} channel'.format(key))
+            self.closeChannelList[key] = []
+            self.send('interface ccmts {}'.format(key))
+            self.readuntil('(config-if-ccmts-{})#'.format(key))
+            self.send('show running-config | include no cable.*shutdown')
+            re = self.readuntil('(config-if-ccmts-{})#'.format(key))
+            lines = re.split('\r\n')
+            for line in lines:
+                if 'Filtering...' in line or '#' in line or 'show running-config | include no cable.*shutdown' in line:
+                    continue
+                else :
+                    self.log('ccmts{} open channel cmd({}) append'.format(key,line))
+                    self.closeChannelList[key].append(line)
+            self.send('cable upstream 1-4 shutdown')
+            self.readuntil('(config-if-ccmts-{})#'.format(key))
+            self.send('cable downstream 1-16 shutdown')
+            self.readuntil('(config-if-ccmts-{})#'.format(key))
+            self.send('exit')
+            self.readuntil('(config)#')
+    def openChannel(self):
+        self.log('openChannel')
+        self.send('end')
+        self.readuntil('#')
+        self.send('configure terminal')
+        self.readuntil('(config)#')
+        for key in self.closeChannelCmtsKeys:
+            self.send('interface ccmts {}'.format(key))
+            self.readuntil('(config-if-ccmts-{})#'.format(key))
+            if self.closeChannelList.has_key(key) :
+                closeChannelCmdList = self.closeChannelList[key]
+                for line in closeChannelCmdList:
+                    self.send(line)
+                    self.readuntil('(config-if-ccmts-{})#'.format(key))
     def mduUpgrade(self,vlan,gateway,ftpServer,ftpUsername,ftpPassword,imageFileName):
         self.log('mduUpgrade')
         self.allCmts,self.allkey,self.allVersion,self.allMac = self.getAllOnlineCmts(raiseException=True)
@@ -438,67 +500,77 @@ class UpgradeCcmts(UpgradeOlt):
             else:
                 return True,''
 
-    def resetCmts(self):
+    def resetCmts(self,beforeUpgrade=False):
         self.log('reset all Cmts')
         self.send('end')
         self.readuntil('#')
         self.send('configure terminal')
         self.readuntil('(config)#')
-        self.send('configure terminal')
-        self.readuntil('(config)#')
-        resetCmts = []
-        resetThreads = []
-        for slot, portMap in self.allCmts.items():
-            for port, deviceList in portMap.items():
-                slotGateway = int(self.gateway)
-                for device in deviceList:
-                    key = '{}/{}/{}'.format(slot,port,device)
-                    if self.upgradeStatus.has_key(key) :
-                        nversion = self.allVersion[key]
-                        mac = self.allMac[key]
-                        if nversion != None and nversion != 'no version' and nversion != '' and nversion != self.version:
-                            resetCmts.append(key)
-                            while True:
-                                for t in resetThreads:
-                                    if not t.isAlive():
-                                        state, msg = t.getResetResult()
-                                        if not state:
-                                            self.log(msg)
-                                            # self.writeResult(msg)
-                                            self.faildCount = self.faildCount + 1
-                                        else:
-                                            self.successCount = self.successCount + 1
-                                        resetThreads.remove(t)
+        if beforeUpgrade :
+            for slot, portMap in self.allCmts.items():
+                for port, deviceList in portMap.items():
+                    for device in deviceList:
+                        key = '{}/{}/{}'.format(slot,port,device)
+                        self.send('interface ccmts {}'.format(key))
+                        self.readuntil('(config-if-ccmts-{})#'.format(key))
+                        self.send('reset')
+                        self.readuntil('(config-if-ccmts-{})#'.format(key))
+        else :
+            resetCmts = []
+            resetThreads = []
+            self.faildCount = 0
+            self.successCount = 0
+            for slot, portMap in self.allCmts.items():
+                for port, deviceList in portMap.items():
+                    slotGateway = int(self.gateway)
+                    for device in deviceList:
+                        key = '{}/{}/{}'.format(slot,port,device)
+                        if self.upgradeStatus.has_key(key) or beforeUpgrade:
+                            nversion = self.allVersion[key]
+                            mac = self.allMac[key]
+                            if nversion != None and nversion != 'no version' and nversion != '' and nversion != self.version:
+                                resetCmts.append(key)
+                                while True:
+                                    for t in resetThreads:
+                                        if not t.isAlive():
+                                            state, msg = t.getResetResult()
+                                            if not state:
+                                                self.log(msg)
+                                                # self.writeResult(msg)
+                                                self.faildCount = self.faildCount + 1
+                                            else:
+                                                self.successCount = self.successCount + 1
+                                            resetThreads.remove(t)
+                                            break
+                                    if len(resetThreads) < self.threadNum / 2:
+                                        resetCcmts = ResetCcmts()
+                                        resetCcmts.connect(self, self.host, self.isAAA, self.userName, self.password,
+                                                              self.enablePassword, slotGateway, slot, port, device,  self.logPath, mac)
+                                        resetCcmts.setDaemon(True)
+                                        resetCcmts.start()
+                                        resetThreads.append(resetCcmts)
+                                        time.sleep(1)
                                         break
-                                if len(resetThreads) < self.threadNum / 2:
-                                    resetCcmts = ResetCcmts()
-                                    resetCcmts.connect(self, self.host, self.isAAA, self.userName, self.password,
-                                                          self.enablePassword, slotGateway, slot, port, device,  self.logPath, mac)
-                                    resetCcmts.setDaemon(True)
-                                    resetCcmts.start()
-                                    resetThreads.append(resetCcmts)
-                                    time.sleep(1)
-                                    break
-                                else:
-                                    time.sleep(10)
+                                    else:
+                                        time.sleep(10)
 
-        while True:
-            if len(resetThreads) == 0:
-                break
-            removeThread = []
-            for t in resetThreads:
-                if not t.isAlive():
-                    state, msg = t.getResetResult()
-                    if not state:
-                        self.log(msg)
-                        # self.writeResult(msg)
-                        self.faildCount = self.faildCount + 1
-                    else:
-                        self.successCount = self.successCount + 1
-                    removeThread.append(t)
+            while True:
+                if len(resetThreads) == 0:
                     break
-            for t in removeThread:
-                resetThreads.remove(t)
+                removeThread = []
+                for t in resetThreads:
+                    if not t.isAlive():
+                        state, msg = t.getResetResult()
+                        if not state:
+                            self.log(msg)
+                            # self.writeResult(msg)
+                            self.faildCount = self.faildCount + 1
+                        else:
+                            self.successCount = self.successCount + 1
+                        removeThread.append(t)
+                        break
+                for t in removeThread:
+                    resetThreads.remove(t)
 
     def clearConfig(self,vlan):
         self.log('clearConfig',headName='clearResult')
@@ -513,17 +585,17 @@ class UpgradeCcmts(UpgradeOlt):
                 if not state :
                     self.writeResult(msg)
         self.doClearVlanConfig(vlan)
-    def doResetCmts(self):
+    def doResetCmts(self,beforeUpgrade=False):
         self.log('doResetCmts',headName='clearResult')
         bArray,bKeys,allVersion,allMac = self.getAllOnlineCmts()
         self.log('online cmts count(' + `len(bKeys)` + ')')
-        self.resetCmts()
+        self.resetCmts(beforeUpgrade)
         while True:
             nbArray,nbKeys,allVersion,allMac = self.getAllOnlineCmts()
             self.log('online cmts count before reset(' + `len(bKeys)` + ') after reset(' + `len(nbKeys)` + ')')
             if len(bKeys) == len(nbKeys) :
                 for key,version in allVersion.items():
-                    if self.upgradeStatus.has_key(key):
+                    if self.upgradeStatus.has_key(key) or beforeUpgrade:
                         self.listView.setData('{}_{}'.format(self.host,key), 'result', version)
                 break
             time.sleep(30)
