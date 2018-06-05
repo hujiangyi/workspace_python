@@ -40,7 +40,10 @@ class UpgradeOlt(Thread):
         self.log('reconnect telnet')
         self.doTelnet()
         self.send('')
+        self.sleepT(3)
         self.readuntil('#')
+        self.log('reconnect telnet end')
+
 
     def setTelnetArg(self, host, isAAA, userName, password, enablePassword):
         self.host = host
@@ -185,9 +188,9 @@ class UpgradeOlt(Thread):
 
     def needLogin(self, str):
         try:
-            if 'assword:' in str:
-                #self.log('CLI timeout need login.')
-                if self.isAAA == '1':
+            #self.log('CLI timeout need login.')
+            if self.isAAA == '1':
+                if 'sername:' in str :
                     self.send('')
                     re = self.readuntilII(waitstr='sername:', timeout=30)
                     self.send(self.userName)
@@ -196,7 +199,11 @@ class UpgradeOlt(Thread):
                     self.readuntilII('>', timeout=30)
                     self.send('en')
                     self.readuntilII('#', timeout=30)
-                else:
+                    return True
+                else :
+                    return False
+            else:
+                if 'assword:' in str :
                     self.send('')
                     self.readuntilII(waitstr='assword:', timeout=30)
                     self.send(self.password)
@@ -205,9 +212,9 @@ class UpgradeOlt(Thread):
                     self.readuntilII('Enable Password:', timeout=30)
                     self.send(self.enablePassword)
                     self.readuntilII('#', timeout=30)
-                return True
-            else :
-                return False
+                    return True
+                else :
+                    return False
         except Exception, msg:
             self.log(`msg`)
             raise Exception("login faild!")
@@ -393,7 +400,7 @@ class UpgradeOlt(Thread):
                 continue
             cols = s.split()
             for f in otherFiles:
-                if f in s:
+                if f in s and 'appbak' not in s:
                     fileSizes[f] = int(cols[3])
                     break
         return fileSizes
